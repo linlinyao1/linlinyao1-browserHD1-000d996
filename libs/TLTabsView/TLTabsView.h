@@ -57,5 +57,7 @@
 
 -(void)tabsView:(TLTabsView *)tabsView willDisplayTab:(UIView*)tab atIndexPath:(NSIndexPath *)indexPath;
 
+-(void)tabsViewDidEndScrollingAnimation:(TLTabsView *)tabsView;
+
 
 @end

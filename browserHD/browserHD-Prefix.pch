@@ -13,14 +13,20 @@
     #import <Foundation/Foundation.h>
 
 
+#define RUN_BACK(block) dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), block)
+#define RUN_MAIN(block) dispatch_async(dispatch_get_main_queue(),block)
 
-#endif
 
 #define RCViewAutoresizingALL   UIViewAutoresizingFlexibleLeftMargin|\
-                                UIViewAutoresizingFlexibleWidth|\
-                                UIViewAutoresizingFlexibleRightMargin|\
-                                UIViewAutoresizingFlexibleTopMargin|\
-                                UIViewAutoresizingFlexibleHeight|\
-                                UIViewAutoresizingFlexibleBottomMargin
+UIViewAutoresizingFlexibleWidth|\
+UIViewAutoresizingFlexibleRightMargin|\
+UIViewAutoresizingFlexibleTopMargin|\
+UIViewAutoresizingFlexibleHeight|\
+UIViewAutoresizingFlexibleBottomMargin
 
 #define RCViewAutoresizingInternal  UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight
+
+
+#define PerformanceDebug 1
+
+#endif

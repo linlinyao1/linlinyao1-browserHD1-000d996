@@ -66,7 +66,8 @@
 ///////////////////
 @property (unsafe_unretained, nonatomic) IBOutlet UIView *browserView;
 
-
+@property (nonatomic,strong) NSIndexPath* selectedIndexPath;
+@property (nonatomic,unsafe_unretained) BOOL updating;
 
 ///////private method/////
 -(void)homePageQuitEditingIfNeeded;
@@ -136,7 +137,7 @@
 {
     [super viewDidLoad];
     
-
+    self.selectedIndexPath = [NSIndexPath indexPathForRow:0 inSection:0];
 	// Do any additional setup after loading the view, typically from a nib.
     self.listContent = [NSMutableArray arrayWithObjects:TITLE_FOR_NEWTAB, nil];
     self.listWebViews = [NSMutableArray arrayWithObject:[[RCWebView alloc] initWithFrame:self.browserView.bounds]];
@@ -320,21 +321,39 @@
 
 -(void)loadUrlforCurrentTab:(NSURL *)url
 {
-    RCTab *tab = [self currentTab];
-    if (!tab.webView) {
+    if (!url) {
+        UIAlertView* alert = [[UIAlertView alloc] initWithTitle:@"网址格式不正确" message:@"请使用右侧搜索框搜索" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil];
+        [alert show];
         return;
     }
-    
+#ifndef PerformanceDebug
+    RCTab *tab = [self currentTab];
+    if (!tab.webView) {
+        [self performSelector:@selector(loadUrlforCurrentTab:) withObject:url afterDelay:.1];
+        return;
+    }
     if (!url.scheme.length) {
         url = [NSURL URLWithString:[@"http://" stringByAppendingString:url.absoluteString]];
     }
     
     [tab.webView loadRequest:[NSURLRequest requestWithURL:url]];
-//    self.DashBoardUrlField.text = url.absoluteString;
+    //    self.DashBoardUrlField.text = url.absoluteString;
     tab.webView.isWebPage = YES;
     [self.homePage removeFromSuperview];
     [self.browserView addSubview:tab.webView];
     tab.webView.frame = self.browserView.bounds;
+#else
+    RCWebView* webview = [self.listWebViews objectAtIndex:[self.browserTabView indexPathForSelectedTab].row];
+    if (!url.scheme.length) {
+        url = [NSURL URLWithString:[@"http://" stringByAppendingString:url.absoluteString]];
+    }
+    [webview loadRequest:[NSURLRequest requestWithURL:url]];
+    //    self.DashBoardUrlField.text = url.absoluteString;
+    webview.isWebPage = YES;
+    [self.homePage removeFromSuperview];
+    [self.browserView addSubview:webview];
+#endif
+
 }
 
 -(void)loadUrl:(NSURL *)url ForTab:(RCTab *)tab
@@ -507,6 +526,7 @@
 }
 -(void)addNewTab
 {
+    self.updating = YES;
     if (self.listWebViews.count>=20) {
         UIAlertView* alert = [[UIAlertView alloc] initWithTitle:@"标签卡过多" message:@"打开太多标签影响性能，请关闭没用的标签！" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil];
         [alert show];
@@ -528,7 +548,7 @@
     
     [self.browserTabView insertTabAtIndexPath:newIndexPath];
     [self.browserTabView selectTabAtIndexPath:newIndexPath];
-    
+//    self.selectedIndexPath = newIndexPath;
     
     RCTab *firstTab = (RCTab *)[self.browserTabView tabAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
     if (self.listWebViews.count<=1) {
@@ -541,8 +561,6 @@
 -(void)handleAddNewTab:(UIButton *)sender
 {
     [self addNewTab];
-//    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(addNewTab) object:nil];
-//    [self performSelector:@selector(addNewTab) withObject:nil afterDelay:.05];
 }
 
 -(void)removeHint{
@@ -720,6 +738,8 @@
 {
     [self addNewTab];
     [self loadUrlforCurrentTab:link];
+
+//    [self loadUrlforCurrentTab:link];
 }
 -(void)RCTab:(RCTab *)tab OpenLinkAtBackground:(NSURL *)link
 {
@@ -771,6 +791,7 @@
 
 -(void)tabsView:(TLTabsView *)tabsView configureTab:(UIView *)view forViewAtIndexPath:(NSIndexPath *)indexPath
 {
+#ifndef PerformanceDebug
     RCTab *tab = (RCTab*)view;
     
     if ([[tabsView indexPathForSelectedTab] isEqual: indexPath]) {
@@ -789,24 +810,45 @@
         tab.titleLabel.text = TITLE_FOR_NEWTAB;//[self.listContent objectAtIndex:indexPath.row];
         [tab.favIcon setImageURL:nil];
     }
+#else
+    RCTab *tab = (RCTab*)view;
+    if ([[tabsView indexPathForSelectedTab] isEqual: indexPath]) {
+        [tab setSelected:YES];
+    }else{
+        [tab setSelected:NO];
+    }
+#endif
+
 }
 
 -(void)tabsView:(TLTabsView *)tabsView didSelectTabAtIndexPath:(NSIndexPath *)indexPath
 {
+#ifdef PerformanceDebug
     RCTab *tab = (RCTab *)[tabsView tabAtIndexPath:indexPath];
     [tab setSelected:YES];
     
-    if (tab.webView == [self.listWebViews objectAtIndex:indexPath.row]) {
-        NSLog(@"yes");
+    RCWebView* web = [self.listWebViews objectAtIndex:indexPath.row];
+    if (web.isWebPage) {
+        [self.homePage removeFromSuperview];
+        [self.browserView addSubview:web];
     }else{
-        NSLog(@"no");
+        [self restoreHomePage];
     }
+    return;
+#else
+    RCTab *tab = (RCTab *)[tabsView tabAtIndexPath:indexPath];
+    
+    [tab setSelected:YES];
+    
+    //    if (tab.webView == [self.listWebViews objectAtIndex:indexPath.row]) {
+    //        NSLog(@"yes");
+    //    }else{
+    //        NSLog(@"no");
+    //    }
     
     
-//    if (indexPath == [tabsView indexPathForSelectedTab]) {
-        [tabsView.tableView bringSubviewToFront:tab.superview];
-        [tabsView.tableView bringSubviewToFront:self.addNew.superview];
-//    }
+    [tabsView.tableView bringSubviewToFront:tab.superview];
+    [tabsView.tableView bringSubviewToFront:self.addNew.superview];
     
     if (tab.webView.isWebPage) {
         [self.homePage removeFromSuperview];
@@ -815,6 +857,7 @@
     }else{
         [self restoreHomePage];
     }
+    
     
     RCUrlField *urlInput = self.DashBoardUrlField;
     if (tab.webView.isWebPage) {
@@ -830,6 +873,9 @@
     [self updateBackForwardButtonWithTab:tab];
     [self updateLoadingState];
     [tabsView scrollToTabAtIndexPath:indexPath];
+#endif
+
+
 }
 
 -(void)tabsView:(TLTabsView *)tabsView didDeselectTabAtIndexPath:(NSIndexPath *)indexPath
@@ -838,6 +884,15 @@
     [tab setSelected:NO];
     [tab.webView removeFromSuperview];
 }
+
+-(void)tabsViewDidEndScrollingAnimation:(TLTabsView *)tabsView
+{
+    if (self.updating) {
+        self.updating = NO;
+        [tabsView selectTabAtIndexPath:self.selectedIndexPath];
+    }
+}
+
 
 #pragma mark -
 #pragma mark EasyTableViewDelegate
@@ -1250,7 +1305,7 @@
         
         [FavButtonActionSheet addButtonWithTitle:@"添加到收藏夹"];
     }
-    [FavButtonActionSheet addButtonWithTitle:@"打开网址收藏夹"];
+    [FavButtonActionSheet addButtonWithTitle:@"打开收藏夹/历史"];
     [FavButtonActionSheet showFromRect:self.DashBoardFav.frame inView:self.DashBoard animated:YES];
     
     self.bookMarkActionSheet = FavButtonActionSheet;
@@ -1271,7 +1326,7 @@
         
         bookmarkAdd.bookmarkTitle.text = [self.currentTab.webView title];
         bookmarkAdd.bookmarkUrl.text = [self.currentTab.webView url].absoluteString;
-    }else if ([[actionSheet buttonTitleAtIndex:buttonIndex] isEqualToString:@"打开网址收藏夹"]){
+    }else if ([[actionSheet buttonTitleAtIndex:buttonIndex] isEqualToString:@"打开收藏夹/历史"]){
         RCBookmarkView *bookmarkView = [[RCBookmarkView alloc] init];
 //        [self.view.superview insertSubview:bookmarkView belowSubview:self.view];
 //        CATransition *animation = [CATransition animation];

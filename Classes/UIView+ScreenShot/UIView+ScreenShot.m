@@ -11,7 +11,6 @@
 
 @implementation UIView (ScreenShot)
 
-
 -(UIImage *)screenShotImage
 {
     if ([[UIScreen mainScreen] respondsToSelector:@selector(scale)])

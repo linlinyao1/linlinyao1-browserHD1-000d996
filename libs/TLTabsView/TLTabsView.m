@@ -235,4 +235,14 @@
 }
 
 
+#pragma mark - UIScrollViewDelegate
+
+//-(void)scrollViewDidEndScrollingAnimation:(UIScrollView *)scrollView
+//{
+//    if ([self.delegate respondsToSelector:@selector(tabsViewDidEndScrollingAnimation:)]) {
+//        [self.delegate tabsViewDidEndScrollingAnimation:self];
+//    }
+//}
+
+
 @end

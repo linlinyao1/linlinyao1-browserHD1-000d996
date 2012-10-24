@@ -41,7 +41,7 @@
 {
     if (_webView != webView) {
         _webView = webView;
-        _webView.delegate = self;
+//        _webView.delegate = self;
         _webView.longPressDelegate = self;
     }
 }
@@ -50,7 +50,6 @@
 {
     if (_selected != selected) {
         _selected = selected;
-
         if (_selected) {
             [self.backgroundView addSubview:self.selectedBackgroundView];
 //            [self insertSubview:self.selectedBackgroundView aboveSubview:self.backgroundView];
@@ -63,7 +62,6 @@
             [self.closeTabButton setImage:[UIImage imageNamed:@"tab_delete_hite"] forState:UIControlStateHighlighted];
             self.titleLabel.textColor = [UIColor whiteColor];
         }
-        
     }
 }
 
@@ -141,42 +139,43 @@
     [[RCRecordData class] performSelector:@selector(saveImageForWeb:) withObject:webView afterDelay:1];
         
 
-    
-    
-    NSMutableArray *historyArray = [RCRecordData recordDataWithKey:RCRD_HISTORY];
-    BOOL saveURL = YES;
-    
-    // Check that the URL is not already in the history list
-    NSString* urlString = webView.request.URL.absoluteString;
-    if ([urlString hasSuffix:@"/"]) {
-        urlString = [urlString substringToIndex:urlString.length-1];
-    }
-    for (BookmarkObject * history in historyArray) {
-        NSString* historyString = history.url.absoluteString;
-        if ([historyString hasSuffix:@"/"]) {
-            historyString = [historyString substringToIndex:historyString.length-1];
+    void(^updateHistory)() = ^{
+        NSMutableArray *historyArray = [RCRecordData recordDataWithKey:RCRD_HISTORY];
+        BOOL saveURL = YES;
+        // Check that the URL is not already in the history list
+        NSString* urlString = webView.request.URL.absoluteString;
+        if ([urlString hasSuffix:@"/"]) {
+            urlString = [urlString substringToIndex:urlString.length-1];
         }
+        for (BookmarkObject * history in historyArray) {
+            NSString* historyString = history.url.absoluteString;
+            if ([historyString hasSuffix:@"/"]) {
+                historyString = [historyString substringToIndex:historyString.length-1];
+            }
+            
+            if ([historyString isEqual:urlString]) {
+                history.date = [NSDate date];
+                history.count = [NSNumber numberWithInt: history.count.intValue+1];
+                saveURL = NO;
+                break;
+            }
+        }
+        // Add the new URL in the list
+        if (saveURL) {
+            BookmarkObject *history = [[BookmarkObject alloc] initWithName:self.titleLabel.text andURL:webView.request.URL];
+            [historyArray addObject:history];
+        }
+        [RCRecordData updateRecord:historyArray ForKey:RCRD_HISTORY];
         
-        if ([historyString isEqual:urlString]) {
-            history.date = [NSDate date];
-            history.count = [NSNumber numberWithInt: history.count.intValue+1];
-            saveURL = NO;
-            break;
-        }
-    }
-    // Add the new URL in the list
-    if (saveURL) {
-        BookmarkObject *history = [[BookmarkObject alloc] initWithName:self.titleLabel.text andURL:webView.request.URL];
-        [historyArray addObject:history];
-    }
-    [RCRecordData updateRecord:historyArray ForKey:RCRD_HISTORY];
+        
+        NSArray *favArray = [historyArray sortedArrayUsingComparator:^NSComparisonResult(BookmarkObject *obj1, BookmarkObject *obj2) {
+            return [obj2.count compare:obj1.count];
+        }];
+        favArray = [favArray subarrayWithRange:NSMakeRange(0, MIN(favArray.count, MAX_FAV_COUNT))];
+        [RCRecordData updateRecord:favArray ForKey:RCRD_FAV];
+    };
     
-    
-    NSArray *favArray = [historyArray sortedArrayUsingComparator:^NSComparisonResult(BookmarkObject *obj1, BookmarkObject *obj2) {
-        return [obj2.count compare:obj1.count];
-    }];
-    favArray = [favArray subarrayWithRange:NSMakeRange(0, MIN(favArray.count, MAX_FAV_COUNT))];
-    [RCRecordData updateRecord:favArray ForKey:RCRD_FAV];
+    RUN_BACK(updateHistory);
 }
 
 -(void)handleProgressTimer:(NSTimer*)sender
@@ -223,7 +222,7 @@
 #pragma mark - UIWebViewDelegate
 
 -(void)webViewDidStartLoad:(UIWebView *)webView
-{
+{    
     self.webLoadingCount++;
         
     NSLog(@"start :%@",webView.request.URL);
@@ -255,7 +254,7 @@
     
     if ([[url scheme] isEqualToString:@"newtab"] || ([isBlankInBaseElement isEqualToString:@"yes"] && navigationType == UIWebViewNavigationTypeLinkClicked) ) {
         NSString *urlString = [[url resourceSpecifier] stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
-        url = [NSURL URLWithString:urlString relativeToURL:[(RCWebView*)webView url]];
+        url = [NSURL URLWithString:urlString relativeToURL:webView.request.URL];
         [self openlinkAtNewTab:url];
         return NO;
     }
@@ -273,6 +272,7 @@
 
 -(void)webViewDidFinishLoad:(UIWebView *)webView
 {
+
     NSLog(@"finish :%@",webView.request.URL);
     self.webLoadingCount--;
     if (self.webLoadingCount == 0) {
@@ -288,6 +288,7 @@
 
 -(void)webView:(UIWebView *)webView didFailLoadWithError:(NSError *)error
 {
+
     self.webLoadingCount--;
     
     if (self.webLoadingCount == 0) {

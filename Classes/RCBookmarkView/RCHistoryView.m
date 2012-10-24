@@ -242,7 +242,9 @@
                 }
             }
         }
-        
+        [self.listContent sortUsingComparator:^NSComparisonResult(BookmarkObject* obj1, BookmarkObject* obj2) {
+            return [obj2.date compare:obj1.date];
+        }];
         [self.rightTable reloadData];
     }else if (tableView == self.rightTable){
         BookmarkObject* history = [self.listContent objectAtIndex:indexPath.row];

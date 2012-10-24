@@ -114,7 +114,7 @@
             [historyArray sortUsingComparator:^NSComparisonResult(BookmarkObject* obj1, BookmarkObject* obj2) {
                 return [obj2.date compare:obj1.date];
             }];
-            [tempArray addObjectsFromArray:[historyArray subarrayWithRange:NSMakeRange(0, 10)]];
+            [tempArray addObjectsFromArray:[historyArray subarrayWithRange:NSMakeRange(0, 9)]];
         }
         
         //hot sites
@@ -182,7 +182,7 @@
         url = [NSURL URLWithString:cell.textLabel.text];
     }
     
-    if (url && [self.delegate respondsToSelector:@selector(urlSuggestionSelected:)]) {
+    if ([self.delegate respondsToSelector:@selector(urlSuggestionSelected:)]) {
         [self.delegate urlSuggestionSelected:url];
     }
 }

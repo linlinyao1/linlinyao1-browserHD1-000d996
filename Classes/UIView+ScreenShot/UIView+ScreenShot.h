@@ -11,4 +11,5 @@
 @interface UIView (ScreenShot)
 -(UIImage*)screenShotImage;
 -(UIImage*)screenShotImageWithRoundConor:(CGFloat) cornerRadius;
+
 @end

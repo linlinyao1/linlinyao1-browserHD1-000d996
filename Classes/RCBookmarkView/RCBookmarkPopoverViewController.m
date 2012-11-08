@@ -83,11 +83,20 @@
         [alert show];
         return;
     }
+
     if (self.bookmarkUrl.text.length == 0) {
         UIAlertView* alert =[[UIAlertView alloc] initWithTitle:nil message:@"链接不能为空" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil];
         [alert show];
         return;
     }
+    for (Bookmark* bookmark in [self.folder bookmarks]) {
+        if ([bookmark.url isEqualToString:self.bookmarkUrl.text]) {
+            UIAlertView* alert =[[UIAlertView alloc] initWithTitle:nil message:@"书签已存在" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil];
+            [alert show];
+            return;
+        }
+    }    
+    
     [[CoreDataManager defaultManager] createBookmarkWithTitle:self.bookmarkTitle.text Url:self.bookmarkUrl.text Folder:self.folder];
     
     [self.popover dismissPopoverAnimated:YES];

@@ -258,7 +258,7 @@
 							<object class="IBUIButton" id="619247390">
 								<reference key="NSNextResponder" ref="965690211"/>
 								<int key="NSvFlags">292</int>
-								<string key="NSFrame">{{720, 0}, {44, 44}}</string>
+								<string key="NSFrame">{{715, 0}, {44, 44}}</string>
 								<reference key="NSSuperview" ref="965690211"/>
 								<reference key="NSWindow"/>
 								<reference key="NSNextKeyView" ref="433665534"/>
@@ -275,15 +275,11 @@
 								<reference key="IBUINormalTitleShadowColor" ref="649284140"/>
 								<object class="NSCustomResource" key="IBUIHighlightedBackgroundImage">
 									<string key="NSClassName">NSImage</string>
-									<string key="NSResourceName">setting_hite@2x~ipad.png</string>
-								</object>
-								<object class="NSCustomResource" key="IBUIDisabledBackgroundImage">
-									<string key="NSClassName">NSImage</string>
-									<string key="NSResourceName">setting_disable@2x~ipad.png</string>
+									<string key="NSResourceName">menu_hite@2x~ipad.png</string>
 								</object>
 								<object class="NSCustomResource" key="IBUINormalBackgroundImage">
 									<string key="NSClassName">NSImage</string>
-									<string key="NSResourceName">setting_normall@2x~ipad.png</string>
+									<string key="NSResourceName">menu_normal@2x~ipad.png</string>
 								</object>
 								<reference key="IBUIFontDescription" ref="398756792"/>
 								<reference key="IBUIFont" ref="915990756"/>
@@ -307,10 +303,7 @@
 						<reference key="NSSuperview" ref="766721923"/>
 						<reference key="NSWindow"/>
 						<string key="NSReuseIdentifierKey">_NS:9</string>
-						<object class="NSColor" key="IBUIBackgroundColor">
-							<int key="NSColorSpace">3</int>
-							<bytes key="NSWhite">MC42NjY2NjY2NjY3AA</bytes>
-						</object>
+						<reference key="IBUIBackgroundColor" ref="611784974"/>
 						<string key="targetRuntimeIdentifier">IBIPadFramework</string>
 					</object>
 				</array>
@@ -577,7 +570,7 @@
 				<string key="107.CustomClassName">RCSearchField</string>
 				<string key="107.IBPluginDependency">com.apple.InterfaceBuilder.IBCocoaTouchPlugin</string>
 				<string key="108.IBPluginDependency">com.apple.InterfaceBuilder.IBCocoaTouchPlugin</string>
-				<real value="3" key="108.IBUIButtonInspectorSelectedStateConfigurationMetadataKey"/>
+				<real value="0.0" key="108.IBUIButtonInspectorSelectedStateConfigurationMetadataKey"/>
 				<string key="2.IBPluginDependency">com.apple.InterfaceBuilder.IBCocoaTouchPlugin</string>
 				<string key="61.IBPluginDependency">com.apple.InterfaceBuilder.IBCocoaTouchPlugin</string>
 			</dictionary>
@@ -585,7 +578,7 @@
 			<nil key="activeLocalization"/>
 			<dictionary class="NSMutableDictionary" key="localizations"/>
 			<nil key="sourceID"/>
-			<int key="maxID">125</int>
+			<int key="maxID">126</int>
 		</object>
 		<object class="IBClassDescriber" key="IBDocument.Classes">
 			<array class="NSMutableArray" key="referencedPartialClassDescriptions">
@@ -608,40 +601,6 @@
 				<object class="IBPartialClassDescription">
 					<string key="className">RCViewController</string>
 					<string key="superclassName">UIViewController</string>
-					<dictionary class="NSMutableDictionary" key="actions">
-						<string key="handleBackButtonPress:">UIButton</string>
-						<string key="handleFavButtonPress:">UIButton</string>
-						<string key="handleForwardButtonPress:">UIButton</string>
-						<string key="handleHomeButtonPress:">UIButton</string>
-						<string key="handleKeyBoardAccessoryInput:">UIButton</string>
-						<string key="handleSettingButtonPress:">id</string>
-					</dictionary>
-					<dictionary class="NSMutableDictionary" key="actionInfosByName">
-						<object class="IBActionInfo" key="handleBackButtonPress:">
-							<string key="name">handleBackButtonPress:</string>
-							<string key="candidateClassName">UIButton</string>
-						</object>
-						<object class="IBActionInfo" key="handleFavButtonPress:">
-							<string key="name">handleFavButtonPress:</string>
-							<string key="candidateClassName">UIButton</string>
-						</object>
-						<object class="IBActionInfo" key="handleForwardButtonPress:">
-							<string key="name">handleForwardButtonPress:</string>
-							<string key="candidateClassName">UIButton</string>
-						</object>
-						<object class="IBActionInfo" key="handleHomeButtonPress:">
-							<string key="name">handleHomeButtonPress:</string>
-							<string key="candidateClassName">UIButton</string>
-						</object>
-						<object class="IBActionInfo" key="handleKeyBoardAccessoryInput:">
-							<string key="name">handleKeyBoardAccessoryInput:</string>
-							<string key="candidateClassName">UIButton</string>
-						</object>
-						<object class="IBActionInfo" key="handleSettingButtonPress:">
-							<string key="name">handleSettingButtonPress:</string>
-							<string key="candidateClassName">id</string>
-						</object>
-					</dictionary>
 					<dictionary class="NSMutableDictionary" key="outlets">
 						<string key="DashBoard">UIView</string>
 						<string key="DashBoardBack">UIButton</string>
@@ -724,9 +683,8 @@
 			<string key="home_disable@2x~ipad.png">{88, 88}</string>
 			<string key="home_hite@2x~ipad.png">{88, 88}</string>
 			<string key="home_normall@2x~ipad.png">{88, 88}</string>
-			<string key="setting_disable@2x~ipad.png">{88, 88}</string>
-			<string key="setting_hite@2x~ipad.png">{88, 88}</string>
-			<string key="setting_normall@2x~ipad.png">{88, 88}</string>
+			<string key="menu_hite@2x~ipad.png">{88, 88}</string>
+			<string key="menu_normal@2x~ipad.png">{88, 88}</string>
 		</dictionary>
 		<string key="IBCocoaTouchPluginVersion">1926</string>
 	</data>

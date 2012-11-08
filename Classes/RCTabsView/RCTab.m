@@ -75,6 +75,8 @@
         self.selectedBackgroundView = [[UIImageView alloc] initWithFrame:self.backgroundView.bounds];
         self.favIcon.placeholderImage = [UIImage imageNamed:@"tab_newtab"];
         self.loadingProgress = 0;
+        self.titleLabel.textColor = [UIColor whiteColor];
+
     }
     return self;
 }

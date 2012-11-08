@@ -20,18 +20,22 @@
 #import "RCFolderEditingViewController.h"
 #import "QuartzCore/QuartzCore.h"
 #import "TLTabsView.h"
+#import "RCRecordData.h"
+#import "PopoverView.h"
+#import "RCPopoverMenu.h"
+#import "RNExpandingButtonBar.h"
+
+
 
 #define TITLE_FOR_NEWTAB @"新建标签页"
 
 
-
-
 #pragma mark - Declaration Section
 
-@interface RCViewController ()<EasyTableViewDelegate,RCTabDelegate,UITextFieldDelegate,UIPopoverControllerDelegate,RCUrlInputViewControllerDelegate,RCHomePageDelegate,UIActionSheetDelegate,RCSearchEngineSwitchViewControllerDelegate,RCSearchInputViewControllerDelegate,TLTabsViewDataSource,TLTabsViewDelegate>
+@interface RCViewController ()<RCTabDelegate,UITextFieldDelegate,UIPopoverControllerDelegate,RCUrlInputViewControllerDelegate,RCHomePageDelegate,UIActionSheetDelegate,RCSearchEngineSwitchViewControllerDelegate,RCSearchInputViewControllerDelegate,TLTabsViewDataSource,TLTabsViewDelegate,UIWebViewDelegate,RCWebViewDelegate,PopoverViewDelegate,RCPopoverMenuDelegate>
 @property (nonatomic,strong) EasyTableView *tabsView;
 @property (nonatomic,strong) TLTabsView* browserTabView;
-@property (nonatomic,strong) NSMutableArray *listContent; //of tabs
+@property (nonatomic,strong) NSMutableArray *listURLs; //of tabs
 @property (nonatomic,strong) NSMutableArray *listWebViews; //
 @property (nonatomic,copy) NSString *JSToolCode;
 @property (nonatomic,strong) NSMutableArray *webRestorePool; //for restore
@@ -62,6 +66,10 @@
 @property (nonatomic,strong) UIPopoverController *searchEnginePopover;
 @property (nonatomic,strong) UIActionSheet *bookMarkActionSheet;
 @property (nonatomic,strong) UIPopoverController* bookmarkPopover;
+@property (nonatomic,strong) PopoverView* menuPopover;
+
+
+@property (nonatomic,strong) RNExpandingButtonBar* shortcutButton;
 ///////////////////
 ///////////////////
 @property (unsafe_unretained, nonatomic) IBOutlet UIView *browserView;
@@ -78,15 +86,15 @@
 -(void)addNewBackgroundTab;
 -(void)resumeLastWeb;
 
--(void)loadUrl:(NSURL*)url ForTab:(RCTab*)tab;
+//-(void)loadUrl:(NSURL*)url ForTab:(RCTab*)tab;
 
 -(void)preloadWebView;
 
 -(void)clearAllPopovers;
--(void)updateLoadingState;
+//-(void)updateLoadingState;
 
 -(void)restoreHomePage;
--(void)updateBackForwardButtonWithTab:(RCTab*)tab;
+//-(void)updateBackForwardButtonWithTab:(RCTab*)tab;
 
 //-(void)updateSearchEngine;
 
@@ -100,7 +108,6 @@
 //private
 @synthesize browserView = _browserView;
 @synthesize tabsView = _tabsView;
-@synthesize listContent = _listContent;
 @synthesize DashBoard = _DashBoard;
 @synthesize DashBoardBack = _DashBoardBack;
 @synthesize DashBoardForward = _DashBoardForward;
@@ -137,13 +144,39 @@
 {
     [super viewDidLoad];
     
-    self.selectedIndexPath = [NSIndexPath indexPathForRow:0 inSection:0];
+
+//    self.selectedIndexPath = [NSIndexPath indexPathForRow:0 inSection:0];
+
 	// Do any additional setup after loading the view, typically from a nib.
-    self.listContent = [NSMutableArray arrayWithObjects:TITLE_FOR_NEWTAB, nil];
-    self.listWebViews = [NSMutableArray arrayWithObject:[[RCWebView alloc] initWithFrame:self.browserView.bounds]];
-//    self.listContent = [NSMutableArray array];
-//    self.listWebViews = [NSMutableArray array];
+    
+    self.listWebViews = [NSMutableArray array];
+
+    
+    NSMutableArray* terminateList = [[NSUserDefaults standardUserDefaults] objectForKey:@"terminateList"];
+    if (terminateList) {
+        for (NSDictionary* dic in terminateList) {
+            [self preloadWebView];
+            self.preloadWeb.isWebPage = [[dic objectForKey:@"isWebPage"] boolValue];
+            if (self.preloadWeb.isWebPage) {
+                [self.preloadWeb loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:[dic objectForKey:@"URL"]]]];
+                self.preloadWeb.title = [dic objectForKey:@"title"];
+//                self.preloadWeb.suspend = YES;
+            }
+            [self.listWebViews addObject:self.preloadWeb];
+        }
+    }else{
+        [self preloadWebView];
+        self.listWebViews = [NSMutableArray arrayWithObject:self.preloadWeb];
+    }
+    
     [self preloadWebView];
+    [self.browserTabView.tableView reloadData];
+    
+//    NSLog(@"index: %d",[[NSUserDefaults standardUserDefaults] integerForKey:@"SelectedTab"]);
+//    [self.browserTabView selectTabAtIndexPath:[NSIndexPath indexPathForRow:[[NSUserDefaults standardUserDefaults] integerForKey:@"SelectedTab"] inSection:0]];
+
+
+
     
     self.homePage = [[RCHomePage alloc] initWithFrame:self.browserView.bounds];
     self.homePage.delegate =self;
@@ -176,9 +209,16 @@
     browserTabView.delegate = self;
     browserTabView.autoresizingMask = UIViewAutoresizingFlexibleWidth;
     self.browserTabView = browserTabView;
-    [self.view addSubview:browserTabView];
-    [browserTabView.tableView selectRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0] animated:NO scrollPosition:UITableViewScrollPositionMiddle];
-    [self tabsView:browserTabView didSelectTabAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+    [self.view insertSubview:browserTabView aboveSubview:self.DashBoard];
+//    [self.view addSubview:browserTabView];
+    NSIndexPath * indexPath = [NSIndexPath indexPathForRow:[[NSUserDefaults standardUserDefaults] integerForKey:@"SelectedTab"] inSection:0];
+    [browserTabView.tableView selectRowAtIndexPath:indexPath animated:NO scrollPosition:UITableViewScrollPositionNone];
+//damn bad idea
+    int64_t delayInSeconds = 0.1;
+    dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, delayInSeconds * NSEC_PER_SEC);
+    dispatch_after(popTime, dispatch_get_main_queue(), ^(void){
+        [self tabsView:browserTabView didSelectTabAtIndexPath:indexPath];
+    });
     /////////////
     
     
@@ -192,7 +232,8 @@
     restoreTabButton.autoresizingMask = UIViewAutoresizingFlexibleBottomMargin|UIViewAutoresizingFlexibleLeftMargin|UIViewAutoresizingFlexibleRightMargin;
     [restoreTabButton addTarget:self action:@selector(resumeLastWeb) forControlEvents:UIControlEventTouchUpInside];
     [restoreTabButton setEnabled:NO];
-    [self.view addSubview:restoreTabButton];
+    [self.view insertSubview:restoreTabButton aboveSubview:self.DashBoard];
+//    [self.view addSubview:restoreTabButton];
     self.restoreTabButton = restoreTabButton;
     
     self.DashBoard.backgroundColor = [UIColor colorWithPatternImage:[UIImage imageNamed:@"dashboardBG"]];
@@ -225,13 +266,78 @@
     searchInput.leftView = searchEngineButton;
     searchInput.leftViewMode = UITextFieldViewModeAlways;
     [self updateSearchEngine];
-    [self updateLoadingState];
+//    [self updateLoadingState];
+    
+    
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:defaultKeyForShortcut]) {
+        [self ShortcutShouldShow:YES];
+    }
+    
+    
+    if (self.listWebViews.count<=1) {
+        RCTab *lastTab = (RCTab *)[self.browserTabView tabAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+        [lastTab setDisableClose:YES];
+    }
 
+    
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(willResignActive:)
+                                                 name:UIApplicationWillResignActiveNotification
+                                               object:nil];
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(DidEnterBackground:)
+                                                 name:UIApplicationDidEnterBackgroundNotification
+                                               object:nil];
 }
 
 
+- (void)willResignActive:(NSNotification *)notification {
+    NSLog(@"resign active");
+    for (RCWebView* web in self.listWebViews) {
+        if (web.loadingCount>0) {
+            [web stopLoading];
+            if (web.isWebPage) {
+                web.suspend = YES;
+            }
+        }
+    }
+    
+    if (self.menuPopover) {
+        [self.menuPopover dismiss];
+        self.menuPopover = nil;
+    }
+    
+}
+
+- (void)DidEnterBackground:(NSNotification *)notification {
+    NSLog(@"Did Enter Background");
+    NSMutableArray* terminateList = [NSMutableArray arrayWithCapacity:self.listWebViews.count];
+    for (RCWebView* web in self.listWebViews) {
+        NSMutableDictionary* dic = [NSMutableDictionary dictionaryWithCapacity:3];
+        [dic setObject:[NSNumber numberWithBool:web.isWebPage] forKey:@"isWebPage"];
+        if (web.isWebPage) {
+            if (web.request.URL.absoluteString.length) {
+                [dic setObject:web.request.URL.absoluteString forKey:@"URL"];
+            }else{
+                [dic setObject:web.currentURL forKey:@"URL"];
+            }
+            [dic setObject:web.title forKey:@"title"];
+        }
+
+        [terminateList addObject:dic];
+    }
+
+    [[NSUserDefaults standardUserDefaults] setObject:terminateList forKey:@"terminateList"];
+    [[NSUserDefaults standardUserDefaults] setInteger:[self.browserTabView indexPathForSelectedTab].row forKey:@"SelectedTab"];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+}
+
 - (void)viewDidUnload
 {
+    [self.listWebViews removeAllObjects];
+    self.listWebViews = nil;
     self.tabsView = nil;
     self.browserTabView = nil;
     [self setBrowserView:nil];
@@ -251,20 +357,25 @@
 
 -(void)willAnimateRotationToInterfaceOrientation:(UIInterfaceOrientation)toInterfaceOrientation duration:(NSTimeInterval)duration
 {
+//    for (int i=0; i<[self.browserView subviews].count-1; i++) {
+//        UIView* view = [[self.browserView subviews] objectAtIndex:i];
+//        [view removeFromSuperview];
+//    }
+    UIView* view = [[self.browserView subviews] lastObject];
+    view.frame = self.browserView.bounds;
+
     [self.browserTabView.tableView scrollToNearestSelectedRowAtScrollPosition:UITableViewScrollPositionMiddle animated:NO];
     
     if (UIInterfaceOrientationIsLandscape(toInterfaceOrientation)) {
         self.DashBoardUrlField.frame = CGRectMake(self.DashBoardUrlField.frame.origin.x, 6, 510, 31);
         self.DashBoardUrlField.progressImage = [UIImage imageNamed:@"urlField_PB_Landscape"];
         self.DashBoardSearchField.frame = CGRectMake(CGRectGetMaxX(self.DashBoardUrlField.frame)+15, 6, 255, 31);
-        self.DashBoardSetting.frame = CGRectMake(CGRectGetMaxX(self.DashBoardSearchField.frame)+10, 0, 44, 44);
-        
-
+        self.DashBoardSetting.frame = CGRectMake(CGRectGetMaxX(self.DashBoardSearchField.frame)+5, 0, 44, 44);
     }else{
         self.DashBoardUrlField.frame = CGRectMake(self.DashBoardUrlField.frame.origin.x, 6, 390, 31);
         self.DashBoardUrlField.progressImage = [UIImage imageNamed:@"urlField_PB_Portrait"];
-        self.DashBoardSearchField.frame = CGRectMake(CGRectGetMaxX(self.DashBoardUrlField.frame)+15, 6, 126, 31);
-        self.DashBoardSetting.frame = CGRectMake(CGRectGetMaxX(self.DashBoardSearchField.frame)+10, 0, 44, 44);
+        self.DashBoardSearchField.frame = CGRectMake(CGRectGetMaxX(self.DashBoardUrlField.frame)+15, 6, 124, 31);
+        self.DashBoardSetting.frame = CGRectMake(CGRectGetMaxX(self.DashBoardSearchField.frame)+2, 0, 44, 44);
     }
     
     if (self.searchInputPopover) {
@@ -284,6 +395,10 @@
         [self.searchEnginePopover presentPopoverFromRect:self.DashBoardSearchField.leftView.frame inView:self.DashBoardSearchField permittedArrowDirections:UIPopoverArrowDirectionUp animated:YES];
     }
     
+    if (self.menuPopover) {
+        [self.menuPopover showAtPoint:CGPointMake(self.DashBoardSetting.center.x+5, CGRectGetMaxY(self.DashBoardSetting.frame)-30) inView:self.DashBoard withContentView:self.menuPopover.contentView];
+    }
+    
     if (self.restoreHint) {
         if (UIInterfaceOrientationIsLandscape(self.interfaceOrientation)) {
             self.restoreHint.frame = CGRectMake(800, 38, 230, 73);
@@ -298,15 +413,30 @@
 
 -(void)didReceiveMemoryWarning
 {
-    [self.webRestorePool removeAllObjects];
-    self.restoreTabButton.enabled = NO;
+    void(^memoryClean)() = ^{
+//        [self.webRestorePool removeAllObjects];
+        [[NSURLCache sharedURLCache] removeAllCachedResponses];
+    };
+//    self.restoreTabButton.enabled = NO;
+    RUN_BACK(memoryClean);
 
     [super didReceiveMemoryWarning];
 }
 
 - (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)interfaceOrientation
 {
-    return YES;
+    return ![[NSUserDefaults standardUserDefaults] boolForKey:defaultKeyForRoationLock];
+}
+
+static int __i = 0;
+-(BOOL)shouldAutorotate
+{
+    if (__i) {
+        return ![[NSUserDefaults standardUserDefaults] boolForKey:defaultKeyForRoationLock];
+    }else{
+        __i++;
+        return YES;
+    }
 }
 
 -(void)reloadHomePage
@@ -326,7 +456,30 @@
         [alert show];
         return;
     }
-#ifndef PerformanceDebug
+#ifdef PerformanceDebug
+//    NSIndexPath* currentIndex = [self.browserTabView indexPathForSelectedTab];
+    RCWebView* webview = [self.listWebViews objectAtIndex:[self.browserTabView indexPathForSelectedTab].row];
+    if (!url.scheme.length) {
+        url = [NSURL URLWithString:[@"http://" stringByAppendingString:url.absoluteString]];
+    }
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
+        [webview loadRequest:[NSURLRequest requestWithURL:url]];
+    });
+    webview.currentURL = url.absoluteString;
+    
+    self.DashBoardUrlField.text = url.absoluteString;
+    webview.isWebPage = YES;
+    [self updateReloadWithWebview:webview];
+    webview.frame = self.browserView.bounds;
+    [self.homePage removeFromSuperview];
+    [self.browserView addSubview:webview];
+    
+//    if (self.listWebViews.count<=1) {
+//        RCTab *lastTab = (RCTab *)[self.browserTabView tabAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+//        [lastTab setDisableClose:NO];
+//    }
+    [self updateTabClosable];
+#else
     RCTab *tab = [self currentTab];
     if (!tab.webView) {
         [self performSelector:@selector(loadUrlforCurrentTab:) withObject:url afterDelay:.1];
@@ -342,32 +495,24 @@
     [self.homePage removeFromSuperview];
     [self.browserView addSubview:tab.webView];
     tab.webView.frame = self.browserView.bounds;
-#else
-    RCWebView* webview = [self.listWebViews objectAtIndex:[self.browserTabView indexPathForSelectedTab].row];
-    if (!url.scheme.length) {
-        url = [NSURL URLWithString:[@"http://" stringByAppendingString:url.absoluteString]];
-    }
-    [webview loadRequest:[NSURLRequest requestWithURL:url]];
-    //    self.DashBoardUrlField.text = url.absoluteString;
-    webview.isWebPage = YES;
-    [self.homePage removeFromSuperview];
-    [self.browserView addSubview:webview];
 #endif
 
 }
 
--(void)loadUrl:(NSURL *)url ForTab:(RCTab *)tab
-{
-    if (!tab.webView) {
-        return;
-    }
-    if (!url.scheme.length) {
-        url = [NSURL URLWithString:[@"http://" stringByAppendingString:url.absoluteString]];
-    }
-    [tab.webView loadRequest:[NSURLRequest requestWithURL:url]];
-    tab.webView.isWebPage = YES;
-    tab.webView.frame = self.browserView.bounds;
-}
+
+//-(void)loadUrl:(NSURL *)url ForTab:(RCTab *)tab
+//{
+//    if (!tab.webView) {
+//        return;
+//    }
+//    if (!url.scheme.length) {
+//        url = [NSURL URLWithString:[@"http://" stringByAppendingString:url.absoluteString]];
+//    }
+//    [tab.webView loadRequest:[NSURLRequest requestWithURL:url]];
+//    tab.webView.isWebPage = YES;
+//    tab.webView.frame = self.browserView.bounds;
+//}
+
 
 
 -(void)clearAllPopovers
@@ -389,6 +534,7 @@
     if (self.bookMarkActionSheet) {
         [self.bookMarkActionSheet dismissWithClickedButtonIndex:0 animated:YES];
     }
+
 }
 
 
@@ -397,18 +543,20 @@
     return (RCTab *)[self.browserTabView tabAtIndexPath:[self.browserTabView indexPathForSelectedTab]];
 }
 
+-(RCWebView*)currentWeb
+{
+    return [self.listWebViews objectAtIndex:[self.browserTabView indexPathForSelectedTab].row];
+}
+
 -(void)resumeLastWeb
 {
     [self homePageQuitEditingIfNeeded];
 
     if (self.webRestorePool.count>0) {
         NSURL* url = [self.webRestorePool lastObject];
-//        RCWebView *web = [self.webRestorePool lastObject];
-        self.preloadWeb = [[RCWebView alloc] initWithFrame:self.browserView.bounds];
-        self.preloadWeb.isWebPage= YES;
         [self.webRestorePool removeObject:url];
-        [self addNewTab];
-        [self.preloadWeb loadRequest:[NSURLRequest requestWithURL:url]];
+        [self openlinkAtNewTab:url];
+
     }
     if (self.webRestorePool.count <=0) {
         self.restoreTabButton.enabled = NO;
@@ -422,38 +570,38 @@
 {
     self.preloadWeb = nil;
     self.preloadWeb = [[RCWebView alloc] initWithFrame:self.browserView.bounds];
+#ifdef PerformanceDebug
+//    self.preloadWeb.autoresizingMask = RCViewAutoresizingALL;
+    self.preloadWeb.delegate = self;
+    self.preloadWeb.longPressDelegate = self;
+    [self.preloadWeb addObserver:self forKeyPath:@"loadingProgress" options:NSKeyValueObservingOptionNew context:nil];
+#else
     self.preloadWeb.autoresizingMask = RCViewAutoresizingALL;
+#endif
 }
 
--(void)updateBackForwardButtonWithTab:(RCTab *)tab
-{
-    if (tab.webView.isWebPage) {
-//        self.DashBoardHome.enabled = YES;
-        self.DashBoardBack.enabled = YES;
-        self.DashBoardForward.enabled = [tab.webView canGoForward];
-    }else{
-//        self.DashBoardHome.enabled = NO;
-        self.DashBoardBack.enabled = NO;
-        if (tab.webView.request) {
-            self.DashBoardForward.enabled = YES;
-        }else{
-            self.DashBoardForward.enabled = NO;
-        }
-    }
-}
+//-(void)updateBackForwardButtonWithTab:(RCTab *)tab
+//{
+//    if (tab.webView.isWebPage) {
+////        self.DashBoardHome.enabled = YES;
+//        self.DashBoardBack.enabled = YES;
+//        self.DashBoardForward.enabled = [tab.webView canGoForward];
+//    }else{
+////        self.DashBoardHome.enabled = NO;
+//        self.DashBoardBack.enabled = NO;
+//        if (tab.webView.request) {
+//            self.DashBoardForward.enabled = YES;
+//        }else{
+//            self.DashBoardForward.enabled = NO;
+//        }
+//    }
+//}
 
 -(void)updateNetworkActive
 {
     BOOL networkActive = NO;
-//    for (int i=0; i<self.listWebViews.count; i++) {
-//        RCTab* tab = (RCTab*)[self.browserTabView tabAtIndexPath:[NSIndexPath indexPathForRow:i inSection:0]];
-//        if (tab.loadingProgress > 0) {
-//            networkActive = YES;
-//            break;
-//        }
-//    }
     for (RCWebView* webView in self.listWebViews) {
-        if (webView.isLoading) {
+        if (webView.loadingCount>0) {
             networkActive = YES;
             break;
         }
@@ -465,6 +613,52 @@
     }
 }
 
+-(void)updateBackForwardButtonWithWebview:(RCWebView*)webView
+{
+    if (webView.isWebPage) {
+        self.DashBoardBack.enabled = YES;
+        self.DashBoardForward.enabled = [webView canGoForward];
+        if (self.shortcutButton) {
+//            [[[self.shortcutButton buttons] objectAtIndex:3] setEnabled:YES]; // page down
+//            [[[self.shortcutButton buttons] objectAtIndex:4] setEnabled:YES]; // page up
+            [[[self.shortcutButton buttons] objectAtIndex:2] setEnabled:YES]; // back
+        }
+    }else{
+        self.DashBoardBack.enabled = NO;
+        if (webView.request.URL.absoluteString.length) {
+            self.DashBoardForward.enabled = YES;
+        }else{
+            self.DashBoardForward.enabled = NO;
+        }
+        if (self.shortcutButton) {
+//            [[[self.shortcutButton buttons] objectAtIndex:3] setEnabled:NO]; // page down
+//            [[[self.shortcutButton buttons] objectAtIndex:4] setEnabled:NO]; // page up
+            [[[self.shortcutButton buttons] objectAtIndex:2] setEnabled:NO]; // back
+        }
+    }
+}
+
+-(void)updateReloadWithWebview:(RCWebView*)webView
+{
+    self.reloadStopButton.hidden = !webView.isWebPage;
+    if (webView.loadingCount >0) {
+        [self.reloadStopButton setImage:[UIImage imageNamed:@"stopload"] forState:UIControlStateNormal];
+    }else{
+        [self.reloadStopButton setImage:[UIImage imageNamed:@"reload"] forState:UIControlStateNormal];
+    }
+}
+
+-(void)updateTabClosable{
+    RCTab *firstTab = (RCTab *)[self.browserTabView tabAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+    if (self.listWebViews.count<=1 && ![(RCWebView*)[self.listWebViews lastObject] isWebPage]) {
+        [firstTab setDisableClose:YES];
+    }else{
+        [firstTab setDisableClose:NO];
+    }
+    if (self.shortcutButton) {
+        [[[self.shortcutButton buttons] objectAtIndex:1] setEnabled:!firstTab.closeTabButton.isHidden];
+    }
+}
 
 -(void)searchFieldActive:(BOOL)active
 {    
@@ -497,37 +691,55 @@
 }
 
 
+-(NSIndexPath*)indexPathForWebview:(UIWebView*)webView
+{
+    NSInteger row = [self.listWebViews indexOfObject:webView];
+    if (row!=NSNotFound) {
+        return [NSIndexPath indexPathForRow:row inSection:0];
+    }else{
+        return nil;
+    }
+}
 
+-(void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context
+{
+    RCWebView* web = object;
+    if (web == [self currentWeb]) {
+//        NSLog(@"progress: %f",web.loadingProgress);
+        self.DashBoardUrlField.loadingProgress = [NSNumber numberWithFloat:web.loadingProgress];
+    }
+}
 
 #pragma mark -
 #pragma mark ADD/REMOVE NEW TAB
 
 -(void)addNewBackgroundTab
 {
-    if (self.listWebViews.count>=20) {
+    if (self.listWebViews.count>=12) {
         UIAlertView* alert = [[UIAlertView alloc] initWithTitle:@"标签卡过多" message:@"打开太多标签影响性能，请关闭没用的标签！" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil];
         [alert show];
         return;
     }
     NSIndexPath *newIndexPath = [NSIndexPath indexPathForRow:self.listWebViews.count inSection:0];
 
-    [self.listContent addObject:TITLE_FOR_NEWTAB];
     [self.listWebViews addObject:self.preloadWeb];
+    [self.listURLs addObject:@""];
     [self performSelector:@selector(preloadWebView) withObject:nil afterDelay:.5];
     
     [self.browserTabView insertTabAtIndexPath:newIndexPath];
     
-    RCTab *firstTab = (RCTab *)[self.browserTabView tabAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
-    if (self.listWebViews.count<=1) {
-        [firstTab setDisableClose:YES];
-    }else{
-        [firstTab setDisableClose:NO];
-    }
+    [self updateTabClosable];
+//    RCTab *firstTab = (RCTab *)[self.browserTabView tabAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+//    if (self.listWebViews.count<=1) {
+//        [firstTab setDisableClose:YES];
+//    }else{
+//        [firstTab setDisableClose:NO];
+//    }
 }
 -(void)addNewTab
 {
     self.updating = YES;
-    if (self.listWebViews.count>=20) {
+    if (self.listWebViews.count>=12) {
         UIAlertView* alert = [[UIAlertView alloc] initWithTitle:@"标签卡过多" message:@"打开太多标签影响性能，请关闭没用的标签！" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil];
         [alert show];
         return;
@@ -542,20 +754,21 @@
     NSIndexPath *newIndexPath = [NSIndexPath indexPathForRow:self.listWebViews.count inSection:0];
 
     
-    [self.listContent addObject:TITLE_FOR_NEWTAB];
     [self.listWebViews addObject:self.preloadWeb];
-    [self performSelector:@selector(preloadWebView) withObject:nil afterDelay:.5];
+    [self preloadWebView];
+//    [self performSelector:@selector(preloadWebView) withObject:nil afterDelay:.5];
     
     [self.browserTabView insertTabAtIndexPath:newIndexPath];
     [self.browserTabView selectTabAtIndexPath:newIndexPath];
-//    self.selectedIndexPath = newIndexPath;
-    
-    RCTab *firstTab = (RCTab *)[self.browserTabView tabAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
-    if (self.listWebViews.count<=1) {
-        [firstTab setDisableClose:YES];
-    }else{
-        [firstTab setDisableClose:NO];
-    }
+
+    [self updateTabClosable];
+
+//    RCTab *firstTab = (RCTab *)[self.browserTabView tabAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+//    if (self.listWebViews.count<=1) {
+//        [firstTab setDisableClose:YES];
+//    }else{
+//        [firstTab setDisableClose:NO];
+//    }
 }
 
 -(void)handleAddNewTab:(UIButton *)sender
@@ -569,6 +782,64 @@
 }
 -(void)tabNeedsToBeClosed:(RCTab *)tab
 {
+#ifdef PerformanceDebug
+    if (self.listWebViews.count<=1) {
+        if ([(RCWebView*)[self.listWebViews lastObject] isWebPage]) {
+            [self handleHomeButtonPress:nil];
+            [self updateTabClosable];
+            //            RCTab *lastTab = (RCTab *)[self.browserTabView tabAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+//            [lastTab setDisableClose:YES];
+        }
+        return;
+    }
+    NSIndexPath *indexPath = [self.browserTabView indexPathForTab:tab];
+    NSIndexPath* selectedIndexPath = [self.browserTabView indexPathForSelectedTab];
+    
+    
+    
+    
+    RCWebView* web = [self.listWebViews objectAtIndex:indexPath.row];
+    
+    //for restore
+    if (!self.webRestorePool) {
+        self.webRestorePool = [NSMutableArray arrayWithCapacity:1];
+    }
+    if (web.isWebPage && web.request.URL) {
+        [self.webRestorePool addObject:web.request.URL];
+        self.restoreTabButton.enabled = YES;
+    }
+    
+    if (self.webRestorePool.count >= 12) {
+        [self.webRestorePool removeObjectAtIndex:0];
+    }
+    //end of restore
+    [web stringByEvaluatingJavaScriptFromString:@"stopVideo()"];
+    
+    
+    [web cleanForDealloc];
+    [web removeObserver:self forKeyPath:@"loadingProgress"];
+    [self.listWebViews removeObjectAtIndex:indexPath.row];
+
+    [self.browserTabView removeTabAtIndexPath:indexPath];
+    if ([indexPath isEqual:selectedIndexPath]) {
+        if (indexPath.row == 0) {
+            [self.browserTabView selectTabAtIndexPath:indexPath];
+        }else{
+            [self.browserTabView selectTabAtIndexPath:[NSIndexPath indexPathForRow:indexPath.row-1 inSection:0]];
+        }
+    }
+
+    [self updateTabClosable];
+//    if (self.listWebViews.count<=1) {
+//        RCTab *lastTab = (RCTab *)[self.browserTabView tabAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+//        if ([(RCWebView*)[self.listWebViews lastObject] isWebPage]) {
+//            [lastTab setDisableClose:NO];
+//        }else{
+//            [lastTab setDisableClose:YES];
+//        }
+//    }
+    
+#else
     if (self.listWebViews.count<=1) {
         return;
     }
@@ -633,85 +904,153 @@
     
     [self updateNetworkActive];
     [self updateLoadingState];
+#endif
+
 }
+
 
 
 #pragma mark -
-#pragma mark Updating loading state && RCTabDelegate
--(void)updateLoadingState
-{
-    RCTab* tab = [self currentTab];
-    [self.reloadStopButton setHidden:!tab.webView.isWebPage];
-    [self.reloadStopButton setSelected:tab.webView.isLoading];
-}
+#pragma mark - UIWebViewDelegate
 
--(void)RCTab:(RCTab *)tab LoadingProgressChanged:(CGFloat)progress
+-(BOOL)webView:(UIWebView *)webView shouldStartLoadWithRequest:(NSURLRequest *)request navigationType:(UIWebViewNavigationType)navigationType
 {
-//    NSIndexPath *indexPath = [self.tabsView indexPathForView:tab];
-//    if ([indexPath isEqual:self.tabsView.selectedIndexPath]) {
-    if (tab == [self currentTab]) {
-        if (tab.webView.isWebPage) {
-            [self updateBackForwardButtonWithTab:tab];
-            self.DashBoardUrlField.loadingProgress = [NSNumber numberWithFloat:progress];
+    if ([request.URL.absoluteString isEqualToString:@"about:blank"]) {
+        return NO;
+    }
+    NSLog(@"should: %@",request.URL);
+    NSURL *url = [request URL];
+    NSString *isBlankInBaseElement = [webView stringByEvaluatingJavaScriptFromString:@"MyIPhoneApp_isBlankInBaseElement()"];
+    
+    if ([[url scheme] isEqualToString:@"newtab"] || ([isBlankInBaseElement isEqualToString:@"yes"] && navigationType == UIWebViewNavigationTypeLinkClicked) ) {
+        NSString *urlString = [[url resourceSpecifier] stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
+        url = [NSURL URLWithString:urlString relativeToURL:webView.request.URL];
+        [self openlinkAtNewTab:url];
+        return NO;
+    }
+    
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSIndexPath *indexPath = [self indexPathForWebview:webView];
+        if ([indexPath isEqual:[self.browserTabView indexPathForSelectedTab]]) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self updateReloadWithWebview:(RCWebView*)webView];
+                [self updateBackForwardButtonWithWebview:(RCWebView*)webView];
+                if (request.mainDocumentURL.absoluteString.length) {
+                    self.DashBoardUrlField.text = request.mainDocumentURL.absoluteString;
+                }
+            });
         }
-        return;
-    }
+    });
+    
+    return YES;
 }
 
-
--(void)RCTab:(RCTab *)tab StartLoadingWebView:(RCWebView *)webView WithRequest:(NSURLRequest *)request
-{
-    if (webView == [self currentTab].webView && tab.webView.isWebPage) {
-        [self updateLoadingState];
-        [self updateBackForwardButtonWithTab:tab];
-        self.DashBoardUrlField.text = request.mainDocumentURL.absoluteString;//request.URL.absoluteString;
-
+-(void)webViewDidStartLoad:(UIWebView *)webView
+{    
+    RCWebView* web = (RCWebView*)webView;
+    if (web.loadingCount == 0) {
+        [web startLoadingProgress];
     }
-    
+    web.loadingCount++;
     [self updateNetworkActive];
 }
 
--(void)RCTab:(RCTab *)tab FinishLoadingWebView:(RCWebView *)webView
+-(void)webViewDidFinishLoad:(UIWebView *)webView
 {
-    [webView stringByEvaluatingJavaScriptFromString: self.JSToolCode];    
-    [webView stringByEvaluatingJavaScriptFromString:@"MyIPhoneApp_ModifyLinkTargets()"];
-    NSIndexPath *indexPath = [self.browserTabView indexPathForTab:tab];
+    RCWebView* web = (RCWebView*)webView;
+    web.loadingCount--;
+    web.currentURL = web.request.URL.absoluteString;
     
-    if (indexPath) {
-        [self.listContent replaceObjectAtIndex:indexPath.row withObject:tab.titleLabel.text];
-    }
-    
-    if (webView == [self currentTab].webView && tab.webView.isWebPage) {
-        [self updateBackForwardButtonWithTab:tab];
+    if (web.loadingCount == 0) {
+        [web stopLoadingProgress];
         
-        self.DashBoardUrlField.text = webView.request.URL.absoluteString;
-        [self updateLoadingState];
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            BOOL update = NO;
+            NSIndexPath *indexPath = [self indexPathForWebview:webView];
+            RCTab *tab = (RCTab *)[self.browserTabView tabAtIndexPath:indexPath];
+            if ([indexPath isEqual:[self.browserTabView indexPathForSelectedTab]]) {
+                update = YES;
+            }
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [webView stringByEvaluatingJavaScriptFromString: self.JSToolCode];
+                [webView stringByEvaluatingJavaScriptFromString:@"MyIPhoneApp_ModifyLinkTargets()"];
+                [webView stringByEvaluatingJavaScriptFromString:@"document.body.style.webkitTouchCallout='none';"];
+                [webView stringByEvaluatingJavaScriptFromString:@"document.documentElement.style.webkitTouchCallout='none';"];
+                if (update) {
+                    [self updateReloadWithWebview:web];
+                    [self updateBackForwardButtonWithWebview:web];
+                    self.DashBoardUrlField.text = webView.request.URL.absoluteString;
+                }
+                
+                tab.titleLabel.text = [(RCWebView*)webView updateTitle];
+                NSURL *url = [[NSURL alloc] initWithScheme:[webView.request.URL scheme] host:[webView.request.URL host] path:@"/favicon.ico"];
+                [tab.favIcon setImageURL:url];
+                
+                [self updateNetworkActive];
+                [self updateTabClosable];
+                [[RCRecordData class] performSelector:@selector(saveImageForWeb:) withObject:webView afterDelay:.5];
+
+                //update history
+                void(^updateHistory)() = ^{
+                    NSMutableArray *historyArray = [RCRecordData recordDataWithKey:RCRD_HISTORY];
+                    BOOL saveURL = YES;
+                    // Check that the URL is not already in the history list
+                    NSString* urlString = webView.request.URL.absoluteString;
+                    if ([urlString hasSuffix:@"/"]) {
+                        urlString = [urlString substringToIndex:urlString.length-1];
+                    }
+                    for (BookmarkObject * history in historyArray) {
+                        NSString* historyString = history.url.absoluteString;
+                        if ([historyString hasSuffix:@"/"]) {
+                            historyString = [historyString substringToIndex:historyString.length-1];
+                        }
+                        
+                        if ([historyString isEqual:urlString]) {
+                            history.date = [NSDate date];
+                            history.count = [NSNumber numberWithInt: history.count.intValue+1];
+                            saveURL = NO;
+                            break;
+                        }
+                    }
+                    // Add the new URL in the list
+                    if (saveURL) {
+                        BookmarkObject *history = [[BookmarkObject alloc] initWithName:tab.titleLabel.text andURL:webView.request.URL];
+                        [historyArray addObject:history];
+                    }
+                    [RCRecordData updateRecord:historyArray ForKey:RCRD_HISTORY];
+                    
+                    NSArray *favArray = [historyArray sortedArrayUsingComparator:^NSComparisonResult(BookmarkObject *obj1, BookmarkObject *obj2) {
+                        return [obj2.count compare:obj1.count];
+                    }];
+                    favArray = [favArray subarrayWithRange:NSMakeRange(0, MIN(favArray.count, MAX_FAV_COUNT))];
+                    [RCRecordData updateRecord:favArray ForKey:RCRD_FAV];
+                };
+                if (![[NSUserDefaults standardUserDefaults] boolForKey:defaultKeyForTraceless]) {
+                    RUN_BACK(updateHistory);
+                }
+                
+                    
+                
+            });
+        });
     }
-    
-    [self updateNetworkActive];
-    
 }
 
-
-
--(void)RCTab:(RCTab *)tab DidStartLoadingWebView:(RCWebView *)webView
+-(void)webView:(UIWebView *)webView didFailLoadWithError:(NSError *)error
 {
-    [webView stringByEvaluatingJavaScriptFromString: self.JSToolCode];
-
-    if (webView == [self currentTab].webView && tab.webView.isWebPage) {
-        [self updateLoadingState];
-    }
-    
-    [self updateNetworkActive];
-}
-
--(void)RCTab:(RCTab *)tab DidFailLoadingWebView:(RCWebView *)webView WithErrorCode:(NSError *)error
-{
+    RCWebView* web = (RCWebView*)webView;
+    web.loadingCount--;
     NSLog(@"fail");
     switch ([error code]) {
         case kCFURLErrorCancelled :
         {
             // Do nothing in this case
+            break;
+        }
+        case kCFURLTimeoutError:
+        {
+            UIAlertView* alert = [[UIAlertView alloc] initWithTitle:nil message:@"网页加载超时" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil];
+            [alert show];
             break;
         }
         default:
@@ -722,32 +1061,155 @@
             break;
         }
     }
-    if (webView == [self currentTab].webView && tab.webView.isWebPage) {
-        [self updateLoadingState];
+    
+    if (web.loadingCount == 0) {
+        [web stopLoadingProgress];
+        NSIndexPath *indexPath = [self indexPathForWebview:webView];
+        if ([indexPath isEqual:[self.browserTabView indexPathForSelectedTab]]) {
+            [self updateReloadWithWebview:web];
+        }
     }
+    
     [self updateNetworkActive];
-
-
 }
 
--(void)RCTab:(RCTab *)tab OpenLink:(NSURL *)link
+#pragma mark -
+#pragma mark - RCWebViewDelegate
+
+-(void)openlink:(NSURL *)link
 {
     [self loadUrlforCurrentTab:link];
 }
--(void)RCTab:(RCTab *)tab OpenLinkAtNewTab:(NSURL *)link
+
+-(void)openlinkAtNewTab:(NSURL *)link
 {
     [self addNewTab];
     [self loadUrlforCurrentTab:link];
-
-//    [self loadUrlforCurrentTab:link];
 }
--(void)RCTab:(RCTab *)tab OpenLinkAtBackground:(NSURL *)link
+
+-(void)openlinkAtBackground:(NSURL *)link
 {
     [self addNewBackgroundTab];
-    RCTab *lastTab = (RCTab *)[self.browserTabView tabAtIndexPath:[NSIndexPath indexPathForRow:self.listWebViews.count-1 inSection:0]];
-
-    [self loadUrl:link ForTab:lastTab];
+    RCWebView* web = [self.listWebViews lastObject];
+    if (!link.scheme.length) {
+        link = [NSURL URLWithString:[@"http://" stringByAppendingString:link.absoluteString]];
+    }
+    [web loadRequest:[NSURLRequest requestWithURL:link]];
+    web.isWebPage = YES;
 }
+//#pragma mark -
+//#pragma mark Updating loading state && RCTabDelegate
+//-(void)updateLoadingState
+//{
+////    RCTab* tab = [self currentTab];
+////    [self.reloadStopButton setHidden:!tab.webView.isWebPage];
+////    [self.reloadStopButton setSelected:tab.webView.isLoading];
+//}
+//
+//-(void)RCTab:(RCTab *)tab LoadingProgressChanged:(CGFloat)progress
+//{
+////    NSIndexPath *indexPath = [self.tabsView indexPathForView:tab];
+////    if ([indexPath isEqual:self.tabsView.selectedIndexPath]) {
+//    if (tab == [self currentTab]) {
+//        if (tab.webView.isWebPage) {
+//            [self updateBackForwardButtonWithTab:tab];
+//            self.DashBoardUrlField.loadingProgress = [NSNumber numberWithFloat:progress];
+//        }
+//        return;
+//    }
+//}
+//
+//
+//-(void)RCTab:(RCTab *)tab StartLoadingWebView:(RCWebView *)webView WithRequest:(NSURLRequest *)request
+//{
+//    if (webView == [self currentTab].webView && tab.webView.isWebPage) {
+//        [self updateLoadingState];
+//        [self updateBackForwardButtonWithTab:tab];
+//        self.DashBoardUrlField.text = request.mainDocumentURL.absoluteString;//request.URL.absoluteString;
+//
+//    }
+//    
+//    [self updateNetworkActive];
+//}
+//
+//-(void)RCTab:(RCTab *)tab FinishLoadingWebView:(RCWebView *)webView
+//{
+//    [webView stringByEvaluatingJavaScriptFromString: self.JSToolCode];    
+//    [webView stringByEvaluatingJavaScriptFromString:@"MyIPhoneApp_ModifyLinkTargets()"];
+//
+////    NSIndexPath *indexPath = [self.browserTabView indexPathForTab:tab];
+//    
+////    if (indexPath) {
+////        [self.listContent replaceObjectAtIndex:indexPath.row withObject:tab.titleLabel.text];
+////    }
+//    
+//    if (webView == [self currentTab].webView && tab.webView.isWebPage) {
+//        [self updateBackForwardButtonWithTab:tab];
+//        
+//        self.DashBoardUrlField.text = webView.request.URL.absoluteString;
+//        [self updateLoadingState];
+//    }
+//    
+//    [self updateNetworkActive];
+//    
+//}
+//
+//
+//
+//-(void)RCTab:(RCTab *)tab DidStartLoadingWebView:(RCWebView *)webView
+//{
+//    [webView stringByEvaluatingJavaScriptFromString: self.JSToolCode];
+//
+//    if (webView == [self currentTab].webView && tab.webView.isWebPage) {
+//        [self updateLoadingState];
+//    }
+//    
+//    [self updateNetworkActive];
+//}
+//
+//-(void)RCTab:(RCTab *)tab DidFailLoadingWebView:(RCWebView *)webView WithErrorCode:(NSError *)error
+//{
+//    NSLog(@"fail");
+//    switch ([error code]) {
+//        case kCFURLErrorCancelled :
+//        {
+//            // Do nothing in this case
+//            break;
+//        }
+//        default:
+//        {
+//            NSLog(@"fail error: %@",error);
+//            UIAlertView* alert = [[UIAlertView alloc] initWithTitle:nil message:[error localizedDescription] delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil];
+//            [alert show];
+//            break;
+//        }
+//    }
+//    if (webView == [self currentTab].webView && tab.webView.isWebPage) {
+//        [self updateLoadingState];
+//    }
+//    [self updateNetworkActive];
+//
+//
+//}
+
+//-(void)RCTab:(RCTab *)tab OpenLink:(NSURL *)link
+//{
+//    [self loadUrlforCurrentTab:link];
+//}
+//-(void)RCTab:(RCTab *)tab OpenLinkAtNewTab:(NSURL *)link
+//{
+//    [self addNewTab];
+//    [self loadUrlforCurrentTab:link];
+//
+////    [self loadUrlforCurrentTab:link];
+//}
+//-(void)RCTab:(RCTab *)tab OpenLinkAtBackground:(NSURL *)link
+//{
+//    [self addNewBackgroundTab];
+//    RCTab *lastTab = (RCTab *)[self.browserTabView tabAtIndexPath:[NSIndexPath indexPathForRow:self.listWebViews.count-1 inSection:0]];
+//
+//    [self loadUrl:link ForTab:lastTab];
+//}
 
 
 #pragma mark -
@@ -789,9 +1251,39 @@
     return tab;
 }
 
+-(void)tabsView:(TLTabsView *)tabsView willDisplayTab:(UIView *)view atIndexPath:(NSIndexPath *)indexPath
+{
+    RCTab *tab = (RCTab*)view;
+    if ([[tabsView indexPathForSelectedTab] isEqual: indexPath]) {
+//        [tab setSelected:YES];
+        [tabsView.tableView bringSubviewToFront:tab.superview];
+        [tabsView.tableView bringSubviewToFront:self.addNew.superview];
+    }else{
+//        [tab setSelected:NO];
+    }
+}
+
 -(void)tabsView:(TLTabsView *)tabsView configureTab:(UIView *)view forViewAtIndexPath:(NSIndexPath *)indexPath
 {
-#ifndef PerformanceDebug
+#ifdef PerformanceDebug
+    RCTab *tab = (RCTab*)view;
+    if ([[tabsView indexPathForSelectedTab] isEqual: indexPath]) {
+        [tab setSelected:YES];
+//        [tabsView.tableView bringSubviewToFront:tab.superview];
+//        [tabsView.tableView bringSubviewToFront:self.addNew.superview];
+    }else{
+        [tab setSelected:NO];
+    }
+    RCWebView* webview = [self.listWebViews objectAtIndex:indexPath.row];
+    if (webview.isWebPage) {
+        tab.titleLabel.text = [webview title];
+        NSURL *url = [[NSURL alloc] initWithScheme:[webview.request.URL scheme] host:[webview.request.URL host] path:@"/favicon.ico"];
+        [tab.favIcon setImageURL:url];
+    }else{
+        tab.titleLabel.text = TITLE_FOR_NEWTAB;
+        [tab.favIcon setImageURL:nil];
+    }
+#else
     RCTab *tab = (RCTab*)view;
     
     if ([[tabsView indexPathForSelectedTab] isEqual: indexPath]) {
@@ -799,7 +1291,7 @@
     }else{
         [tab setSelected:NO];
     }
-
+    
     tab.webView = [self.listWebViews objectAtIndex:indexPath.row];
     tab.webView.delegate = tab;
     if (tab.webView.isWebPage) {
@@ -807,45 +1299,52 @@
         NSURL *url = [[NSURL alloc] initWithScheme:[tab.webView.request.URL scheme] host:[tab.webView.request.URL host] path:@"/favicon.ico"];
         [tab.favIcon setImageURL:url];
     }else{
-        tab.titleLabel.text = TITLE_FOR_NEWTAB;//[self.listContent objectAtIndex:indexPath.row];
+        tab.titleLabel.text = TITLE_FOR_NEWTAB;
         [tab.favIcon setImageURL:nil];
     }
-#else
-    RCTab *tab = (RCTab*)view;
-    if ([[tabsView indexPathForSelectedTab] isEqual: indexPath]) {
-        [tab setSelected:YES];
-    }else{
-        [tab setSelected:NO];
-    }
 #endif
-
 }
+
 
 -(void)tabsView:(TLTabsView *)tabsView didSelectTabAtIndexPath:(NSIndexPath *)indexPath
 {
 #ifdef PerformanceDebug
+    [tabsView.tableView scrollToNearestSelectedRowAtScrollPosition:UITableViewScrollPositionNone animated:YES];
+    
     RCTab *tab = (RCTab *)[tabsView tabAtIndexPath:indexPath];
     [tab setSelected:YES];
+    
+    [tabsView.tableView bringSubviewToFront:tab.superview];
+    [tabsView.tableView bringSubviewToFront:self.addNew.superview];
     
     RCWebView* web = [self.listWebViews objectAtIndex:indexPath.row];
     if (web.isWebPage) {
         [self.homePage removeFromSuperview];
-        [self.browserView addSubview:web];
+        web.frame = self.browserView.bounds;
+        
+        [self.browserView performSelector:@selector(addSubview:) withObject:web afterDelay:0];
+        
+        if (web.request.URL.absoluteString.length) {
+            self.DashBoardUrlField.text = web.request.URL.absoluteString;
+        }else{
+            self.DashBoardUrlField.text = web.currentURL;
+        }
+        self.DashBoardUrlField.loadingProgress = [NSNumber numberWithFloat:web.loadingProgress];
+        if (web.suspend) {
+            [web reload];
+            web.suspend = NO;
+        }
+        
     }else{
+//        [self handleHomeButtonPress:nil];
         [self restoreHomePage];
     }
-    return;
+    [self updateReloadWithWebview:web];
+    [self updateBackForwardButtonWithWebview:web];
 #else
     RCTab *tab = (RCTab *)[tabsView tabAtIndexPath:indexPath];
     
     [tab setSelected:YES];
-    
-    //    if (tab.webView == [self.listWebViews objectAtIndex:indexPath.row]) {
-    //        NSLog(@"yes");
-    //    }else{
-    //        NSLog(@"no");
-    //    }
-    
     
     [tabsView.tableView bringSubviewToFront:tab.superview];
     [tabsView.tableView bringSubviewToFront:self.addNew.superview];
@@ -874,146 +1373,148 @@
     [self updateLoadingState];
     [tabsView scrollToTabAtIndexPath:indexPath];
 #endif
-
-
 }
 
 -(void)tabsView:(TLTabsView *)tabsView didDeselectTabAtIndexPath:(NSIndexPath *)indexPath
 {
+#ifdef PerformanceDebug
+    RCTab *tab = (RCTab *)[tabsView tabAtIndexPath:indexPath];
+    [tab setSelected:NO];
+    
+    RCWebView *web = [self.listWebViews objectAtIndex:indexPath.row];
+//    [web performSelector:@selector(removeFromSuperview) withObject:nil afterDelay:0];
+    [web removeFromSuperview];
+//    [web removeObserver:self forKeyPath:@"loadingProgress"];
+#else
     RCTab *tab = (RCTab *)[tabsView tabAtIndexPath:indexPath];
     [tab setSelected:NO];
     [tab.webView removeFromSuperview];
-}
+#endif
 
--(void)tabsViewDidEndScrollingAnimation:(TLTabsView *)tabsView
-{
-    if (self.updating) {
-        self.updating = NO;
-        [tabsView selectTabAtIndexPath:self.selectedIndexPath];
-    }
 }
 
 
-#pragma mark -
-#pragma mark EasyTableViewDelegate
 
-// These delegate methods support both example views - first delegate method creates the necessary views
-
-- (UIView*)easyTableView:(EasyTableView*)easyTableView viewForFooterInSection:(NSInteger)section;
-{
-//    UIView *backgound = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 79, 28)];
-//    backgound.backgroundColor = [UIColor colorWithPatternImage:[UIImage imageNamed:@"tab_add_BG"]];
-//    backgound.transform = CGAffineTransformMakeRotation(M_PI);
-    
-    UIButton* addNew = [UIButton buttonWithType:UIButtonTypeCustom];
-    addNew.frame = CGRectMake(0, 0, 60, 36);
-    [addNew setBackgroundImage:[UIImage imageNamed:@"tab_add_BG"] forState:UIControlStateNormal];
-    [addNew setBackgroundImage:[UIImage imageNamed:@"tab_add_BG"] forState:UIControlStateHighlighted];
-
-//    addNew.backgroundColor = [UIColor colorWithPatternImage:[UIImage imageNamed:@"tab_add_BG"]];
-    [addNew setImage:[UIImage imageNamed:@"tab_add_normal"] forState:UIControlStateNormal];
-    [addNew setImage:[UIImage imageNamed:@"tab_add_hite"] forState:UIControlStateHighlighted];
-    [addNew addTarget:self action:@selector(handleAddNewTab:) forControlEvents:UIControlEventTouchUpInside];
-    self.addNew = addNew;
-//    [backgound addSubview:addNew];
-    
-    return addNew;
-}
-
-
--(NSUInteger)numberOfCellsForEasyTableView:(EasyTableView *)view inSection:(NSInteger)section
-{
-    return self.listWebViews.count;
-}
-
-
-- (UIView *)easyTableView:(EasyTableView *)easyTableView viewForRect:(CGRect)rect {
-    RCTab *tab = [[RCTab alloc]init];
-    tab.delegate = self;
-    tab.backgroundView.image = [UIImage imageNamed:@"tabBG_normal"];
-    tab.selectedBackgroundView.image = [UIImage imageNamed:@"tabBG_hite"];
-    return tab;
-}
-
-// Second delegate populates the views with data from a data source
-- (void)easyTableView:(EasyTableView *)easyTableView setDataForView:(UIView *)view forIndexPath:(NSIndexPath *)indexPath {
-    RCTab *tab = (RCTab *)view;
-    if ([easyTableView.selectedIndexPath isEqual: indexPath]) {
-        [tab setSelected:YES];
-    }else{
-        [tab setSelected:NO];
-    }
-    
-    tab.webView = [self.listWebViews objectAtIndex:indexPath.row];
-//    tab.webView.longPressDelegate = tab;
-//    tab.webView.delegate = tab;
-    if (tab.webView.isWebPage) {
-        tab.titleLabel.text = [tab.webView title];
-        NSURL *url = [[NSURL alloc] initWithScheme:[tab.webView.request.URL scheme] host:[tab.webView.request.URL host] path:@"/favicon.ico"];
-        [tab.favIcon setImageURL:url];
-    }else{
-        tab.titleLabel.text = [self.listContent objectAtIndex:indexPath.row];
-        [tab.favIcon setImageURL:nil];
-    }
-}
-
-// Optional delegate to track the selection of a particular cell
-- (void)easyTableView:(EasyTableView *)easyTableView selectedView:(UIView *)selectedView atIndexPath:(NSIndexPath *)newIndex deselectedView:(UIView *)deselectedView AtIndexPath:(NSIndexPath *)oldIndex{
-    [self homePageQuitEditingIfNeeded];
-    
-    RCTab *dsbackgroundView = (RCTab *)deselectedView;
-    [dsbackgroundView setSelected:NO];
-    
-    RCTab *sbackgroundView = (RCTab *)selectedView;
-    [sbackgroundView setSelected:YES];
-
- 
-    [easyTableView.tableView bringSubviewToFront:[easyTableView.tableView cellForRowAtIndexPath:newIndex]];
-    [easyTableView.tableView bringSubviewToFront:easyTableView.sectionFooter];
-    
-    
-    [dsbackgroundView.webView removeFromSuperview];
-    
-    if (sbackgroundView.webView.isWebPage) {
-        [self.homePage removeFromSuperview];
-        sbackgroundView.webView.autoresizingMask = RCViewAutoresizingALL;
-        [self.browserView addSubview:sbackgroundView.webView];
-        sbackgroundView.webView.frame = self.browserView.bounds;
-    }else{
-        [self restoreHomePage];
-    }
-    
-    
-    RCUrlField *urlInput = self.DashBoardUrlField;
-    if (sbackgroundView.webView.isWebPage) {
-        urlInput.text = sbackgroundView.webView.request.URL.absoluteString;
-        if (sbackgroundView.loadingProgress <=0 || sbackgroundView.loadingProgress>=1) {
-            urlInput.loadingProgress = 0;
-        }
-    }else{
-        urlInput.text = nil;
-        urlInput.loadingProgress = 0;
-    }
-    
-    [self updateBackForwardButtonWithTab:sbackgroundView];
-    
-    [easyTableView.tableView scrollToRowAtIndexPath:newIndex atScrollPosition:UITableViewScrollPositionMiddle animated:YES];
-}
-
-
--(void)easyTableView:(EasyTableView *)easyTableView WillDisplayCell:(UITableViewCell *)cell AtIndex:(NSIndexPath *)indexPath
-{
-    RCTab *tab = (RCTab *)[cell viewWithTag:CELL_CONTENT_TAG];
-    tab.clipsToBounds = NO;
-    
-    if (self.listWebViews.count <=1 && indexPath.row == 0) {
-        [tab setDisableClose:YES];
-    }
-
-    if ([indexPath isEqual:easyTableView.selectedIndexPath]) {
-        [easyTableView.tableView bringSubviewToFront:cell];
-    }
-}
+//#pragma mark -
+//#pragma mark EasyTableViewDelegate
+//
+//// These delegate methods support both example views - first delegate method creates the necessary views
+//
+//- (UIView*)easyTableView:(EasyTableView*)easyTableView viewForFooterInSection:(NSInteger)section;
+//{
+////    UIView *backgound = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 79, 28)];
+////    backgound.backgroundColor = [UIColor colorWithPatternImage:[UIImage imageNamed:@"tab_add_BG"]];
+////    backgound.transform = CGAffineTransformMakeRotation(M_PI);
+//    
+//    UIButton* addNew = [UIButton buttonWithType:UIButtonTypeCustom];
+//    addNew.frame = CGRectMake(0, 0, 60, 36);
+//    [addNew setBackgroundImage:[UIImage imageNamed:@"tab_add_BG"] forState:UIControlStateNormal];
+//    [addNew setBackgroundImage:[UIImage imageNamed:@"tab_add_BG"] forState:UIControlStateHighlighted];
+//
+////    addNew.backgroundColor = [UIColor colorWithPatternImage:[UIImage imageNamed:@"tab_add_BG"]];
+//    [addNew setImage:[UIImage imageNamed:@"tab_add_normal"] forState:UIControlStateNormal];
+//    [addNew setImage:[UIImage imageNamed:@"tab_add_hite"] forState:UIControlStateHighlighted];
+//    [addNew addTarget:self action:@selector(handleAddNewTab:) forControlEvents:UIControlEventTouchUpInside];
+//    self.addNew = addNew;
+////    [backgound addSubview:addNew];
+//    
+//    return addNew;
+//}
+//
+//
+//-(NSUInteger)numberOfCellsForEasyTableView:(EasyTableView *)view inSection:(NSInteger)section
+//{
+//    return self.listWebViews.count;
+//}
+//
+//
+//- (UIView *)easyTableView:(EasyTableView *)easyTableView viewForRect:(CGRect)rect {
+//    RCTab *tab = [[RCTab alloc]init];
+//    tab.delegate = self;
+//    tab.backgroundView.image = [UIImage imageNamed:@"tabBG_normal"];
+//    tab.selectedBackgroundView.image = [UIImage imageNamed:@"tabBG_hite"];
+//    return tab;
+//}
+//
+//// Second delegate populates the views with data from a data source
+//- (void)easyTableView:(EasyTableView *)easyTableView setDataForView:(UIView *)view forIndexPath:(NSIndexPath *)indexPath {
+//    RCTab *tab = (RCTab *)view;
+//    if ([easyTableView.selectedIndexPath isEqual: indexPath]) {
+//        [tab setSelected:YES];
+//    }else{
+//        [tab setSelected:NO];
+//    }
+//    
+//    tab.webView = [self.listWebViews objectAtIndex:indexPath.row];
+////    tab.webView.longPressDelegate = tab;
+////    tab.webView.delegate = tab;
+//    if (tab.webView.isWebPage) {
+//        tab.titleLabel.text = [tab.webView title];
+//        NSURL *url = [[NSURL alloc] initWithScheme:[tab.webView.request.URL scheme] host:[tab.webView.request.URL host] path:@"/favicon.ico"];
+//        [tab.favIcon setImageURL:url];
+//    }else{
+//        tab.titleLabel.text = [self.listContent objectAtIndex:indexPath.row];
+//        [tab.favIcon setImageURL:nil];
+//    }
+//}
+//
+//// Optional delegate to track the selection of a particular cell
+//- (void)easyTableView:(EasyTableView *)easyTableView selectedView:(UIView *)selectedView atIndexPath:(NSIndexPath *)newIndex deselectedView:(UIView *)deselectedView AtIndexPath:(NSIndexPath *)oldIndex{
+//    [self homePageQuitEditingIfNeeded];
+//    
+//    RCTab *dsbackgroundView = (RCTab *)deselectedView;
+//    [dsbackgroundView setSelected:NO];
+//    
+//    RCTab *sbackgroundView = (RCTab *)selectedView;
+//    [sbackgroundView setSelected:YES];
+//
+// 
+//    [easyTableView.tableView bringSubviewToFront:[easyTableView.tableView cellForRowAtIndexPath:newIndex]];
+//    [easyTableView.tableView bringSubviewToFront:easyTableView.sectionFooter];
+//    
+//    
+//    [dsbackgroundView.webView removeFromSuperview];
+//    
+//    if (sbackgroundView.webView.isWebPage) {
+//        [self.homePage removeFromSuperview];
+//        sbackgroundView.webView.autoresizingMask = RCViewAutoresizingALL;
+//        [self.browserView addSubview:sbackgroundView.webView];
+//        sbackgroundView.webView.frame = self.browserView.bounds;
+//    }else{
+//        [self restoreHomePage];
+//    }
+//    
+//    
+//    RCUrlField *urlInput = self.DashBoardUrlField;
+//    if (sbackgroundView.webView.isWebPage) {
+//        urlInput.text = sbackgroundView.webView.request.URL.absoluteString;
+//        if (sbackgroundView.loadingProgress <=0 || sbackgroundView.loadingProgress>=1) {
+//            urlInput.loadingProgress = 0;
+//        }
+//    }else{
+//        urlInput.text = nil;
+//        urlInput.loadingProgress = 0;
+//    }
+//    
+//    [self updateBackForwardButtonWithTab:sbackgroundView];
+//    
+//    [easyTableView.tableView scrollToRowAtIndexPath:newIndex atScrollPosition:UITableViewScrollPositionMiddle animated:YES];
+//}
+//
+//
+//-(void)easyTableView:(EasyTableView *)easyTableView WillDisplayCell:(UITableViewCell *)cell AtIndex:(NSIndexPath *)indexPath
+//{
+//    RCTab *tab = (RCTab *)[cell viewWithTag:CELL_CONTENT_TAG];
+//    tab.clipsToBounds = NO;
+//    
+//    if (self.listWebViews.count <=1 && indexPath.row == 0) {
+//        [tab setDisableClose:YES];
+//    }
+//
+//    if ([indexPath isEqual:easyTableView.selectedIndexPath]) {
+//        [easyTableView.tableView bringSubviewToFront:cell];
+//    }
+//}
 
 
 #pragma mark -
@@ -1040,19 +1541,17 @@
 {
     [self homePageQuitEditingIfNeeded];
     
-    RCTab* tab = [self currentTab]; 
-    if (tab.webView.isWebPage) {
-//        if (tab.webView.loading){
-//            [tab.webView stopLoading];
-//        }
-//        else {
-//            [tab.webView reload];
-//        }
-        if (sender.isSelected){
-            [tab.webView stopLoading];
-        }
-        else {
-            [tab.webView reload];
+    RCWebView* web = [self currentWeb];
+    if (web.isWebPage) {
+        if (web.loadingCount >0) {
+            [web stopLoading];
+            [web stopLoadingProgress];
+        }else{
+            if (web.request.URL) {
+                [web reload];
+            }else{
+                [self loadUrlforCurrentTab:[NSURL URLWithString:self.DashBoardUrlField.text]];
+            }
         }
     }
 }
@@ -1126,9 +1625,9 @@
 //    return YES;
     
     [self clearAllPopovers];
-    RCTab* tab = [self currentTab];
-    if (tab.webView.isLoading) {
-        [tab.webView stopLoading];
+    RCWebView* webView = [self currentWeb];
+    if (webView.isLoading) {
+        [webView stopLoading];
     }
     if (textField == self.DashBoardUrlField) {
         
@@ -1221,7 +1720,14 @@
 
 - (IBAction)handleBackButtonPress:(UIButton *)sender {
     [self homePageQuitEditingIfNeeded];
-
+#ifdef PerformanceDebug
+    RCWebView *webView = [self currentWeb];
+    if ([webView canGoBack]) {
+        [webView goBack];
+    }else{
+        [self handleHomeButtonPress:nil];
+    }
+#else
     RCTab *tab = [self currentTab];
     //    UITextField *urlInput = (UITextField *)self.dashBoardURLInput.customView;
     if ([tab.webView canGoBack]) {
@@ -1229,12 +1735,25 @@
     }else{
         [self handleHomeButtonPress:nil];
     }
+#endif
 }
 
 
 - (IBAction)handleForwardButtonPress:(UIButton *)sender {
     [self homePageQuitEditingIfNeeded];
-
+#ifdef PerformanceDebug
+    RCWebView *webView = [self currentWeb];
+    if (webView.isWebPage) {
+        [webView goForward];
+    }else{
+        [self.homePage removeFromSuperview];
+        [self.browserView addSubview:webView];
+        webView.frame = self.browserView.bounds;
+        webView.isWebPage = YES;
+        [webView reload];
+        
+    }
+#else
     RCTab *tab = [self currentTab];
     if (tab.webView.isWebPage) {
         [tab.webView goForward];
@@ -1245,7 +1764,7 @@
         tab.webView.isWebPage = YES;
         
         NSString* title = [tab.webView title];
-        [self.listContent replaceObjectAtIndex:[self.browserTabView indexPathForSelectedTab].row withObject:title];
+//        [self.listContent replaceObjectAtIndex:[self.browserTabView indexPathForSelectedTab].row withObject:title];
         tab.titleLabel.text = title;
         
         self.DashBoardUrlField.text = tab.webView.request.URL.absoluteString;
@@ -1253,6 +1772,7 @@
         [tab.favIcon setImageURL:url];
         [self updateBackForwardButtonWithTab:tab];
     }
+#endif
 }
 
 - (IBAction)handleHomeButtonPress:(UIButton *)sender {
@@ -1264,13 +1784,26 @@
         }
     }
     
-    
     if (self.homePage.superview) {
         [self.homePage scroll];
+        return;
     }
     
     [self homePageQuitEditingIfNeeded];
-
+#ifdef PerformanceDebug
+    RCTab *tab = [self currentTab];
+    RCWebView *webView = [self currentWeb];
+    if (webView.isWebPage) {
+        webView.isWebPage = NO;
+        [webView stopLoading];
+    }
+    tab.titleLabel.text = TITLE_FOR_NEWTAB;
+    [tab.favIcon setImageURL:nil];
+    [self restoreHomePage];
+    [self updateBackForwardButtonWithWebview:webView];
+    [self updateNetworkActive];
+    [self updateTabClosable];
+#else
     RCTab *tab = [self currentTab];
     if (tab.webView.isWebPage) {
         [tab.webView removeFromSuperview];
@@ -1279,14 +1812,14 @@
             [tab.webView stopLoading];
         }
     }
-    [self.listContent replaceObjectAtIndex:[self.browserTabView indexPathForSelectedTab].row withObject:TITLE_FOR_NEWTAB];
+//    [self.listContent replaceObjectAtIndex:[self.browserTabView indexPathForSelectedTab].row withObject:TITLE_FOR_NEWTAB];
     tab.titleLabel.text = TITLE_FOR_NEWTAB;
     [tab.favIcon setImageURL:nil];
     
     [self restoreHomePage];
     [self updateBackForwardButtonWithTab:tab];
     [self updateNetworkActive];
-    
+#endif
 }
 
 - (IBAction)handleFavButtonPress:(UIButton *)sender {
@@ -1324,28 +1857,18 @@
         [self.bookmarkPopover presentPopoverFromRect:self.DashBoardFav.frame inView:self.DashBoard permittedArrowDirections:UIPopoverArrowDirectionUp animated:YES];
         bookmarkAdd.popover = self.bookmarkPopover;
         
-        bookmarkAdd.bookmarkTitle.text = [self.currentTab.webView title];
-        bookmarkAdd.bookmarkUrl.text = [self.currentTab.webView url].absoluteString;
+        bookmarkAdd.bookmarkTitle.text = [[self currentWeb] title];
+        bookmarkAdd.bookmarkUrl.text = [[self currentWeb] url].absoluteString;
     }else if ([[actionSheet buttonTitleAtIndex:buttonIndex] isEqualToString:@"打开收藏夹/历史"]){
         RCBookmarkView *bookmarkView = [[RCBookmarkView alloc] init];
-//        [self.view.superview insertSubview:bookmarkView belowSubview:self.view];
-//        CATransition *animation = [CATransition animation];
-//        animation.duration = 0.5;
-//        animation.timingFunction = UIViewAnimationCurveEaseInOut;
-//        animation.type = kCATransitionMoveIn;
-//        animation.subtype = kCATransitionFromLeft;
-//        NSUInteger view1 = [[self.view.superview subviews] indexOfObject:self.view];
-//        NSUInteger view2 = [[self.view.superview subviews] indexOfObject:bookmarkView];
-//        [self.view.superview exchangeSubviewAtIndex:view2 withSubviewAtIndex:view1];
-//        [[self.view.superview layer] addAnimation:animation forKey:@"animation"];
-
         bookmarkView.frame = self.browserView.bounds;
         bookmarkView.rootVC = self;
         [self.browserView addSubview:bookmarkView];
-        RCTab* tab = [self currentTab];
-        if (tab.webView.isLoading) {
-            [tab.webView stopLoading];
+        RCWebView* webView = [self currentWeb];
+        if (webView.isLoading) {
+            [webView stopLoading];
         }
+    
     }
 }
 
@@ -1356,9 +1879,24 @@
 
 
 
-- (IBAction)handleSettingButtonPress:(id)sender {
+- (IBAction)handleSettingButtonPress:(UIButton*)sender {
     [self homePageQuitEditingIfNeeded];
+    
+    
+    RCPopoverMenu* popMenu = [[RCPopoverMenu alloc] initWithFrame:CGRectMake(0, 0, 287, 313)];
+    popMenu.delegate = self;
+    self.menuPopover = [PopoverView showPopoverAtPoint:CGPointMake(sender.center.x+5, CGRectGetMaxY(sender.frame)-30) inView:self.DashBoard withContentView:popMenu delegate:self];
+}
+- (void)popoverViewDidDismiss:(PopoverView *)popoverView;
+{
+    if (popoverView == self.menuPopover) {
+        self.menuPopover = nil;
+    }
+}
 
+-(void)SettingShouldShow
+{
+    [self.menuPopover dismiss];
     RCSettingViewController *settingViewController = [[RCSettingViewController alloc] initWithStyle:UITableViewStyleGrouped];
     settingViewController.mainVC = self;
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:settingViewController];
@@ -1367,7 +1905,151 @@
 }
 
 
-//////popovers' delegates/////
+/////////////SHOTCUT////////////////////////
+-(void)ShortcutShouldShow:(BOOL)show
+{
+    if (show) {
+        CGRect buttonFrame = CGRectMake(0, 0, 55.0f, 55.0f);
+
+        UIButton* pageUp = [UIButton buttonWithType:UIButtonTypeCustom];
+        pageUp.frame = buttonFrame;
+        [pageUp setImage:[UIImage imageNamed:@"shortcut_pageup_normal"] forState:UIControlStateNormal];
+        [pageUp setImage:[UIImage imageNamed:@"shortcut_pageup_disable"] forState:UIControlStateDisabled];
+        [pageUp setImage:[UIImage imageNamed:@"shortcut_pageup_hite"] forState:UIControlStateHighlighted];
+        [pageUp addTarget:self action:@selector(handlePageUp:) forControlEvents:UIControlEventTouchUpInside];
+        
+        UIButton* pageDown = [UIButton buttonWithType:UIButtonTypeCustom];
+        pageDown.frame = buttonFrame;
+        [pageDown setImage:[UIImage imageNamed:@"shortcut_pagedown_normal"] forState:UIControlStateNormal];
+        [pageDown setImage:[UIImage imageNamed:@"shortcut_pagedown_disable"] forState:UIControlStateDisabled];
+        [pageDown setImage:[UIImage imageNamed:@"shortcut_pagedown_hite"] forState:UIControlStateHighlighted];
+        [pageDown addTarget:self action:@selector(handlePageDown:) forControlEvents:UIControlEventTouchUpInside];
+
+        UIButton* back = [UIButton buttonWithType:UIButtonTypeCustom];
+        back.frame = buttonFrame;
+        [back setImage:[UIImage imageNamed:@"shortcut_back_normal"] forState:UIControlStateNormal];
+        [back setImage:[UIImage imageNamed:@"shortcut_back_disable"] forState:UIControlStateDisabled];
+        [back setImage:[UIImage imageNamed:@"shortcut_back_hite"] forState:UIControlStateHighlighted];
+        [back addTarget:self action:@selector(handleBackButtonPress:) forControlEvents:UIControlEventTouchUpInside];
+
+        UIButton* close = [UIButton buttonWithType:UIButtonTypeCustom];
+        close.frame = buttonFrame;
+        [close setImage:[UIImage imageNamed:@"shortcut_close_normal"] forState:UIControlStateNormal];
+        [close setImage:[UIImage imageNamed:@"shortcut_close_disable"] forState:UIControlStateDisabled];
+        [close setImage:[UIImage imageNamed:@"shortcut_close_hite"] forState:UIControlStateHighlighted];
+        [close addTarget:self action:@selector(handleCloseTab:) forControlEvents:UIControlEventTouchUpInside];
+
+        UIButton* fullScreen = [UIButton buttonWithType:UIButtonTypeCustom];
+        fullScreen.frame = buttonFrame;
+        [fullScreen setImage:[UIImage imageNamed:@"shortcut_fullscreen_normal"] forState:UIControlStateNormal];
+        [fullScreen setImage:[UIImage imageNamed:@"shortcut_fullscreen_disable"] forState:UIControlStateDisabled];
+        [fullScreen setImage:[UIImage imageNamed:@"shortcut_fullscreen_hite"] forState:UIControlStateHighlighted];
+        [fullScreen setImage:[UIImage imageNamed:@"shortcut_fullscreen_hite"] forState:UIControlStateSelected];
+        [fullScreen addTarget:self action:@selector(handleFullScreen:) forControlEvents:UIControlEventTouchUpInside];
+
+        NSArray *buttons = [NSArray arrayWithObjects:pageUp, pageDown, back, close, fullScreen,nil];
+        
+        RNExpandingButtonBar* shortcut = [[RNExpandingButtonBar alloc] initWithImage:[UIImage imageNamed:@"shortcut_unexpand"] selectedImage:[UIImage imageNamed:@"shortcut_expand"] toggledImage:[UIImage imageNamed:@"shortcut_expand"] toggledSelectedImage:[UIImage imageNamed:@"shortcut_expand"] buttons:buttons center:CGPointMake(self.view.bounds.size.width-40, self.view.bounds.size.height-40)];
+        shortcut.autoresizingMask = UIViewAutoresizingFlexibleBottomMargin|UIViewAutoresizingFlexibleLeftMargin|UIViewAutoresizingFlexibleRightMargin|UIViewAutoresizingFlexibleTopMargin;
+        [shortcut setAnimationTime:.3f];
+        [shortcut setPadding:1];
+        [shortcut setDelay:0.01];
+        self.shortcutButton = shortcut;
+        [shortcut showButtonsAnimated:YES];
+        if (self.menuPopover) {
+            [self.view insertSubview:self.shortcutButton belowSubview:self.menuPopover];
+        }else{
+            [self.view addSubview:self.shortcutButton];
+        }
+
+        [self updateTabClosable];
+        [self updateBackForwardButtonWithWebview:[self currentWeb]];
+    }else{
+        [self.shortcutButton removeFromSuperview];
+        self.shortcutButton = nil;
+    }
+}
+
+-(void)handlePageUp:(UIButton*)sender{
+    RCWebView* web = [self currentWeb];
+    if (web.isWebPage) {
+        [[web webScrollView] setContentOffset:CGPointMake([web webScrollView].contentOffset.x, MAX(0, [web webScrollView].contentOffset.y-web.bounds.size.height*0.9)) animated:YES];
+    }else{
+        if (self.homePage.navPage.superview) {
+            UIScrollView* scroll = self.homePage.navPage.gridView.scrollView;
+            [scroll setContentOffset:CGPointMake(scroll.contentOffset.x, MAX(0, scroll.contentOffset.y-scroll.bounds.size.height*0.9)) animated:YES];
+        }
+    }
+}
+
+-(void)handlePageDown:(UIButton*)sender{
+    RCWebView* web = [self currentWeb];
+    if (web.isWebPage) {
+        [[web webScrollView] setContentOffset:CGPointMake([web webScrollView].contentOffset.x, MIN([web webScrollView].contentSize.height-web.bounds.size.height, [web webScrollView].contentOffset.y+web.bounds.size.height*0.9)) animated:YES];
+    }else{
+        if (self.homePage.navPage.superview) {
+            UIScrollView* scroll = self.homePage.navPage.gridView.scrollView;
+            [scroll setContentOffset:CGPointMake(scroll.contentOffset.x, MIN(scroll.contentSize.height-scroll.bounds.size.height, scroll.contentOffset.y+scroll.bounds.size.height*0.9)) animated:YES];
+        }
+    }
+
+}
+-(void)handleCloseTab:(UIButton*)sender{
+    [self tabNeedsToBeClosed:[self currentTab]];
+}
+
+-(void)handleFullScreen:(UIButton*)sender{
+//    CGAffineTransform scale = CGAffineTransformMakeScale(2.0f, 2.0f);
+////    CGAffineTransform unScale = CGAffineTransformMakeScale(1.0f, 1.0f);
+//    [UIView animateWithDuration:0.3 animations:^{
+//        [self.browserView setTransform:scale];
+//
+//    } completion:^(BOOL finished){
+//        [self.browserView setTransform:CGAffineTransformIdentity];
+//        if (sender.selected) {
+//            self.browserView.frame = CGRectMake(0, 80, self.view.bounds.size.width, self.view.bounds.size.height-80);
+//            sender.selected = NO;
+//        }else{
+//            self.browserView.frame = self.view.bounds;
+//            sender.selected = YES;
+//        }
+//    }];
+
+    if (sender.selected) {
+        self.browserView.frame = CGRectMake(0, 80, self.view.bounds.size.width, self.view.bounds.size.height-80);
+        [(UIView*)[self.browserView.subviews lastObject] setFrame:self.browserView.bounds];
+        sender.selected = NO;
+    }else{
+        self.browserView.frame = self.view.bounds;
+        [(UIView*)[self.browserView.subviews lastObject] setFrame:self.browserView.bounds];
+        sender.selected = YES;
+    }
+    
+//    [UIView animateWithDuration:.2
+//                     animations:^{
+//                        if (sender.selected) {
+//                            self.browserView.transform = CGAffineTransformIdentity;
+////                            self.browserView.frame = CGRectMake(0, 80, self.view.bounds.size.width, self.view.bounds.size.height-80);
+////                            sender.selected = NO;
+//                        }else{
+//                            self.browserView.transform = CGAffineTransformMakeTranslation(0, -80);
+////                            self.browserView.frame = self.view.bounds;
+////                            sender.selected = YES;
+//                        }
+//                    }
+//                     completion:^(BOOL finished) {
+////                         self.browserView.transform = CGAffineTransformIdentity;
+//                         if (sender.selected) {
+//                             self.browserView.frame = CGRectMake(0, 80, self.view.bounds.size.width, self.view.bounds.size.height-80);
+//                             sender.selected = NO;
+//                         }else{
+//                             self.browserView.frame = self.view.bounds;
+//                             sender.selected = YES;
+//                         }
+//    }];
+}
+
+//////URL popovers' delegates/////
 -(void)urlSuggestionSelected:(NSURL *)url
 {
     [self.urlInputPopover dismissPopoverAnimated:YES];
@@ -1390,22 +2072,22 @@
 #pragma mark HomePage Section
 -(void)restoreHomePage
 {
-    if (!self.homePage.superview) {
-        [self.browserView addSubview:self.homePage];
-        self.homePage.frame = self.browserView.bounds;
-    }
+    [self.browserView addSubview:self.homePage];
+    self.homePage.frame = self.browserView.bounds;
     
     for (UIView* view in [self.browserView subviews]) {
         if ([view isKindOfClass:[RCBookmarkView class]]) {
             [view removeFromSuperview];
         }
     }
-
     
+    
+    RCWebView* web = [self currentWeb];
+    [web stringByEvaluatingJavaScriptFromString:@"stopVideo()"];
+
     self.DashBoardUrlField.loadingProgress = [NSNumber numberWithFloat:0];
     self.DashBoardUrlField.text = nil;
-    
-    [self updateLoadingState];
+//    [self updateLoadingState];
 }
 
 
@@ -1413,20 +2095,19 @@
 {
     switch (option) {
         case RCHomePageLunchNewBackgroundTab:{
-            [self RCTab:nil OpenLinkAtBackground:url];
-//            [self addNewBackgroundTab];
-//            RCTab *lastTab = (RCTab *)[self.tabsView viewAtIndexPath:[NSIndexPath indexPathForRow:self.listContent.count-1 inSection:0]];
-//            
-//            [self loadUrl:url ForTab:lastTab];
+            [self openlinkAtBackground:url];
+//            [self RCTab:nil OpenLinkAtBackground:url];
         }
             break;
         case RCHomePageLunchNewTab:{
-            [self RCTab:nil OpenLinkAtNewTab:url];
+            [self openlinkAtNewTab:url];
+//            [self RCTab:nil OpenLinkAtNewTab:url];
         }
             break;
         case RCHomePageLunchNomal:
         default:
-            [self loadUrlforCurrentTab:url];
+            [self openlink:url];
+//            [self loadUrlforCurrentTab:url];
             break;
     }
 }

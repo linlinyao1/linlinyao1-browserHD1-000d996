@@ -8,14 +8,12 @@
 
 #import "RCHomePage.h"
 #import "RCFavPage.h"
-#import "RCNavigationPage.h"
 #import "UIColor+HexValue.h"
 #import "RCSegment.h"
-
+#import "RCViedoPage.h"
 
 @interface RCHomePage ()<RCFavPageDelegate,RCNavigationPageDelegate,UIScrollViewDelegate,RCSegmentDelegate,RCWebViewDelegate>
 @property (nonatomic,strong) RCFavPage *favPage;
-@property (nonatomic,strong) RCNavigationPage *navPage;
 @property (nonatomic,strong) UIScrollView *scrollBoard;
 @property (nonatomic,strong) RCSegment *segmentIndicator;
 @end
@@ -55,14 +53,24 @@
         
 //        RCNavigationPage* navPage = [[RCNavigationPage alloc] initWithFrame:CGRectOffset(favPage.frame, self.bounds.size.width, 0)];
         RCNavigationPage* navPage = [[RCNavigationPage alloc] initWithFrame:CGRectOffset(self.bounds, self.bounds.size.width, 0)];
-
 //        self.navPage.frame = CGRectOffset(self.bounds, self.bounds.size.width, 0);
-
         navPage.delegate = self;
         [self.scrollBoard addSubview:navPage];
         self.navPage = navPage;
         self.navPage.gridView.navWeb.longPressDelegate = self;
-        self.scrollBoard.contentSize = CGSizeMake(CGRectGetMaxX(navPage.frame), self.bounds.size.height);
+        
+        
+        RCViedoPage * viedoPage = [[RCViedoPage alloc] initWithFrame:CGRectOffset(self.bounds, self.bounds.size.width*2, 0)];
+        viedoPage.autoresizingMask = RCViewAutoresizingALL;//UIViewAutoresizingFlexibleBottomMargin|UIViewAutoresizingFlexibleLeftMargin|UIViewAutoresizingFlexibleRightMargin|UIViewAutoresizingFlexibleTopMargin;
+        viedoPage.backgroundColor = [UIColor yellowColor];
+        [self.scrollBoard addSubview:viedoPage];
+        
+        
+        
+        
+        self.scrollBoard.contentSize = CGSizeMake(CGRectGetMaxX(viedoPage.frame), self.bounds.size.height);
+        [self.scrollBoard scrollRectToVisible:self.navPage.frame animated:NO];
+        
         
         
         
@@ -70,7 +78,7 @@
         segmentView.userInteractionEnabled = YES;
         segmentView.autoresizingMask = UIViewAutoresizingFlexibleTopMargin|UIViewAutoresizingFlexibleLeftMargin|UIViewAutoresizingFlexibleRightMargin|UIViewAutoresizingFlexibleWidth;
         segmentView.image = [UIImage imageNamed:@"segmentViewBG"];
-//        segmentView.backgroundColor = [UIColor colorWithPatternImage:[[UIImage imageNamed:@"segmentViewBG"] stretchableImageWithLeftCapWidth:1 topCapHeight:0]];
+        //        segmentView.backgroundColor = [UIColor colorWithPatternImage:[[UIImage imageNamed:@"segmentViewBG"] stretchableImageWithLeftCapWidth:1 topCapHeight:0]];
         [self addSubview:segmentView];
         
         RCSegment* segment = [[RCSegment alloc] initWithFrame:CGRectMake(0, segmentView.bounds.size.height-10-32, 199, 32)];
@@ -81,9 +89,6 @@
         self.segmentIndicator = segment;
         [segment setSelectIndex:1];
         
-        [self.scrollBoard scrollRectToVisible:self.navPage.frame animated:NO];
-        
-        
 //        [[NSNotificationCenter defaultCenter] addObserver:self
 //                                                 selector:@selector(didRotate:)
 //                                                     name:@"UIDeviceOrientationDidChangeNotification" object:nil];
@@ -91,22 +96,22 @@
     return self;
 }
 
-- (void) didRotate:(NSNotification *)notification{
-//    UIDeviceOrientation orientation = [[UIDevice currentDevice] orientation];
-////    NSLog(@"self.scrollBoard.bounds : %@",NSStringFromCGRect(self.scrollBoard.bounds));
-//    self.scrollBoard.frame = self.bounds;
-//    self.scrollBoard.contentSize = CGSizeMake(self.scrollBoard.bounds.size.width*2, self.scrollBoard.bounds.size.height);
-//    
-//    if (self.scrollBoard.contentOffset.x>5) {
-//        if (UIInterfaceOrientationIsLandscape(orientation)) {
-//            self.scrollBoard.contentOffset = CGPointMake(self.scrollBoard.bounds.size.width, 0);
-//        }else{
-//            self.scrollBoard.contentOffset = CGPointMake(self.scrollBoard.bounds.size.width, 0);
-//        }
-//    }else{
-//        self.scrollBoard.contentOffset = CGPointMake(0, 0);
-//    }
-}
+//- (void) didRotate:(NSNotification *)notification{
+////    UIDeviceOrientation orientation = [[UIDevice currentDevice] orientation];
+//////    NSLog(@"self.scrollBoard.bounds : %@",NSStringFromCGRect(self.scrollBoard.bounds));
+////    self.scrollBoard.frame = self.bounds;
+////    self.scrollBoard.contentSize = CGSizeMake(self.scrollBoard.bounds.size.width*2, self.scrollBoard.bounds.size.height);
+////    
+////    if (self.scrollBoard.contentOffset.x>5) {
+////        if (UIInterfaceOrientationIsLandscape(orientation)) {
+////            self.scrollBoard.contentOffset = CGPointMake(self.scrollBoard.bounds.size.width, 0);
+////        }else{
+////            self.scrollBoard.contentOffset = CGPointMake(self.scrollBoard.bounds.size.width, 0);
+////        }
+////    }else{
+////        self.scrollBoard.contentOffset = CGPointMake(0, 0);
+////    }
+//}
 
 
 -(void)segment:(RCSegment *)segment selectionChange:(NSInteger)newIndex
@@ -137,7 +142,7 @@
 {
     [super layoutSubviews];
     self.scrollBoard.frame = self.bounds;
-    self.scrollBoard.contentSize = CGSizeMake(self.scrollBoard.bounds.size.width*2, self.scrollBoard.bounds.size.height);
+    self.scrollBoard.contentSize = CGSizeMake(self.scrollBoard.bounds.size.width*3, self.scrollBoard.bounds.size.height);
 //    self.favPage.frame = CGRectMake(0, 0, self.bounds.size.width, self.bounds.size.height);
 //    self.navPage.frame = CGRectMake(self.bounds.size.width, 0, self.bounds.size.width, self.bounds.size.height);
 
@@ -157,7 +162,6 @@
     if (self.favPage.isEditing) {
         self.favPage.editing = NO;
     }
-
 }
 
 -(void)relayoutWithOrientation:(UIDeviceOrientation)orientation
@@ -167,7 +171,7 @@
 //    NSLog(@"scrollView.contentOffset.x :%f",self.scrollBoard.contentOffset.x);
 //
     self.scrollBoard.frame = self.bounds;
-    self.scrollBoard.contentSize = CGSizeMake(self.scrollBoard.bounds.size.width*2, self.scrollBoard.bounds.size.height);
+    self.scrollBoard.contentSize = CGSizeMake(self.scrollBoard.bounds.size.width*3, self.scrollBoard.bounds.size.height);
    
     if (self.scrollBoard.contentOffset.x>5) {
         self.scrollBoard.contentOffset = CGPointMake(self.scrollBoard.bounds.size.width, 0);

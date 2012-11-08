@@ -148,6 +148,11 @@
         [alert show];
         return;
     }
+    if (self.titleField.text.length >= 80) {
+        UIAlertView* alert =[[UIAlertView alloc] initWithTitle:nil message:@"文件夹名字不得超过80字" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil];
+        [alert show];
+        return;
+    }
     //TODO
     if (self.editingMode == FolderEditingModeCreat) {
         NSNumber* unique = [[CoreDataManager defaultManager] generateValidFolderUnique];

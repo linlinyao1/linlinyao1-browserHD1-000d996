@@ -15,6 +15,8 @@
 @implementation RCGridNavigationView
 @synthesize navWeb = _navWeb;
 
+
+
 - (id)initWithFrame:(CGRect)frame
 {
     self = [super initWithFrame:frame];
@@ -79,7 +81,6 @@
     self.navWeb.frame = CGRectMake(0, size.height+27 , self.bounds.size.width, 1150);
     
     self.scrollView.contentSize = CGSizeMake(size.width, CGRectGetMaxY (self.navWeb.frame)+0);
-    NSLog(@"size: %@",NSStringFromCGSize(self.scrollView.contentSize));
 
     self.scrollView.contentOffset = offset;
 }

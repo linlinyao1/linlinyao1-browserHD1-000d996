@@ -7,6 +7,8 @@
 //
 
 #import <UIKit/UIKit.h>
+#import "RCNavigationPage.h"
+
 typedef enum{
     RCHomePageLunchNomal=0,
     RCHomePageLunchNewTab,
@@ -18,6 +20,11 @@ typedef enum{
 
 @interface RCHomePage : UIView
 @property (nonatomic,assign) NSObject<RCHomePageDelegate>* delegate;
+
+@property (nonatomic,strong) RCNavigationPage *navPage;
+
+
+
 -(void)relayoutWithOrientation:(UIDeviceOrientation)orientation;
 
 -(void)quitEditng;

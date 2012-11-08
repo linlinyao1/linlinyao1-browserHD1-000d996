@@ -169,38 +169,14 @@ typedef enum {
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
-{
-    
-//    if ([indexPath section] == OptionSectionSearchEngine)
-//    {
-//        static NSString *OptionSectionSearchEngineCellIdentifier = @"OptionSectionSearchEngine";
-//        UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"value1Cell"];
-//        if (!cell) {
-//            cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:OptionSectionSearchEngineCellIdentifier];
-//        }
-//        
-//        switch ([indexPath row])
-//        {
-//            case OptionSearchEngineType:
-//            {
-//                cell.textLabel.text = @"当前搜索引擎";
-//                NSNumber *searchEngine = [[NSUserDefaults standardUserDefaults] objectForKey:@"searchEngine"];
-//                
-//                cell.detailTextLabel.text = [RCSearchEngineSwitchViewController nameForSEtype:searchEngine.integerValue];
-//                cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-//            }
-//                break;
-//        }
-//        return cell;
-//    }
-    
+{    
     static NSString *CellIdentifier = @"Cell";
 
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
     if (!cell) {
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:CellIdentifier];
     }
-    
+    cell.accessoryType = UITableViewCellAccessoryNone;
     
     if ([indexPath section] == OptionSectionSearchEngine)
     {
@@ -236,6 +212,7 @@ typedef enum {
                 break;
         }
     }else if ([indexPath section] == OptionSectionUE) {
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         switch ([indexPath row])
         {
             case OptionUEProtocol:

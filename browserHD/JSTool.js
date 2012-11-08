@@ -26,6 +26,17 @@ function MyAppGetHTMLElementsAtPoint(x,y) {
     return tags;
 }
 
+function MyAppGetImgSrcAtPoint(x,y){
+    var tags = ",";
+    var e = document.elementFromPoint(x,y);
+    if(e && (e.tagName == "img" || e.tagName == "IMG")){
+        return e.src;
+    }
+    else{
+        return "";
+    }
+}
+
 function MyAppGetLinkSRCAtPoint(x,y) {
     var tags = "";
     var e = "";

@@ -23,6 +23,7 @@
     if (self) {
         // Initialization code
         _tableView = [[UITableView alloc] initWithFrame:self.bounds style:UITableViewStylePlain];
+        _tableView.scrollsToTop = NO;
         _tableView.autoresizingMask = UIViewAutoresizingFlexibleHeight;
         _tableView.backgroundColor = [UIColor clearColor];
         _tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
@@ -116,6 +117,7 @@
 
 -(void)selectTabAtIndexPath:(NSIndexPath *)indexPath
 {
+
     if ([self.delegate respondsToSelector:@selector(tabsView:didDeselectTabAtIndexPath:)]) {
         [self.delegate tabsView:self didDeselectTabAtIndexPath:[self indexPathForSelectedTab]];
     }
@@ -123,6 +125,7 @@
     if ([self.delegate respondsToSelector:@selector(tabsView:didSelectTabAtIndexPath:)]) {
         [self.delegate tabsView:self didSelectTabAtIndexPath:indexPath];
     }
+
 }
 -(void)selectTabWithoutAnimationAtIndexPath:(NSIndexPath *)indexPath
 {
@@ -235,8 +238,9 @@
 }
 
 
-#pragma mark - UIScrollViewDelegate
 
+
+#pragma mark - UIScrollViewDelegate
 //-(void)scrollViewDidEndScrollingAnimation:(UIScrollView *)scrollView
 //{
 //    if ([self.delegate respondsToSelector:@selector(tabsViewDidEndScrollingAnimation:)]) {

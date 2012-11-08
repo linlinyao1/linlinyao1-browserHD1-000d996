@@ -20,6 +20,7 @@
 @synthesize progressImage = _progressImage;
 @synthesize innerShadow = _innerShadow;
 
+
 - (id)initWithFrame:(CGRect)frame
 {
     self = [super initWithFrame:frame];
@@ -54,7 +55,9 @@
         _loadingProgress = [NSNumber numberWithFloat:1];
         return;
     }
-    
+    if (_loadingProgress == loadingProgress) {
+        return;
+    }
     _loadingProgress = loadingProgress;
     
     CGRect progressRect = CGRectZero;

@@ -11,6 +11,8 @@
 #import "EGOCache.h"
 #import "JSONKit.h"
 
+#define OneDaySecondes 60*60*24
+
 @interface RCRecordData ()
 +(NSMutableArray*)defaultDataForKey:(NSString*)key;
 @end
@@ -114,22 +116,27 @@ static inline NSString* cachePathForKey(NSString* key) {
 
 
 inline static NSString* screenShotKeyForURL(NSURL* url) {
-    return [NSString stringWithFormat:@"ScreenShot-%u", [[url description] hash]];
+    NSString* string = [url.absoluteString lowercaseString];
+    if ([string hasSuffix:@"/"]) {
+        string = [string substringToIndex:string.length-1];
+    }
+    return [NSString stringWithFormat:@"ScreenShot-%u", [[string description] hash]];
 }
 
 +(void)saveImageForWeb:(UIWebView *)Web
 {    
     if (Web.request.URL.absoluteString.length) {
         NSString* key = screenShotKeyForURL(Web.request.URL);
-//        if (![[EGOCache currentCache] hasCacheForKey:key]) {
-            UIImage *screenShot = [Web screenShotImage];
-            if (screenShot) {
-                [[EGOCache currentCache] setImage:screenShot forKey:key withTimeoutInterval:NSTimeIntervalSince1970];
-            }
-//        };
-        
+        NSDate* createDate = [[EGOCache currentCache] cacheCreationDateForKey:key];
+        NSLog(@"interval: %f",[[NSDate date] timeIntervalSinceDate: createDate]);
+        if (createDate && [[NSDate date] timeIntervalSinceDate: createDate]<OneDaySecondes) {
+            return;
+        }
+        UIImage *screenShot = [Web screenShotImage];
+        if (screenShot) {
+            [[EGOCache currentCache] setImage:screenShot forKey:key withTimeoutInterval:NSTimeIntervalSince1970];
+        }
     }
-    
 }
 
 +(UIImage *)getImageForURL:(NSURL *)url

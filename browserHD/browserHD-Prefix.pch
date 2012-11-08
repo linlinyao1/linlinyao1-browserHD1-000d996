@@ -26,7 +26,12 @@ UIViewAutoresizingFlexibleBottomMargin
 
 #define RCViewAutoresizingInternal  UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight
 
+#define defaultKeyForRoationLock @"Rotation Lock"
+#define defaultKeyForTraceless @"Traceless"
+#define defaultKeyForShortcut @"Shortcut"
+#define defaultKeyForBrightness @"Brightness"
 
-#define PerformanceDebug 1
+
+#define PerformanceDebug
 
 #endif
